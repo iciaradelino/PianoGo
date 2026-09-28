@@ -1,7 +1,5 @@
+import { AppShell } from "../components/app-shell";
+
 export default function Home() {
-  return (
-    <main>
-      <h1>PianoGo</h1>
-    </main>
-  );
+  return <AppShell />;
 }
