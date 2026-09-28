@@ -17,7 +17,6 @@ import {
   BreadcrumbSeparator,
 } from "./ui/breadcrumb";
 import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 import {
   Tabs,
   TabsContent,
@@ -112,7 +111,6 @@ export function AppShell() {
               <PanelLeftClose aria-hidden="true" size={17} />
             )}
           </Button>
-          <Separator className="topbar-divider" orientation="vertical" />
           <Breadcrumb className="breadcrumb">
             <BreadcrumbList>
               <BreadcrumbItem>Workspace</BreadcrumbItem>
