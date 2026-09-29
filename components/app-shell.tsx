@@ -9,10 +9,13 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
+import type { MockSheet } from "@/lib/library/mock-sheets";
 import { LibraryView } from "./library/library-view";
+import { SheetDetailView } from "./library/sheet-detail-view";
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -36,14 +39,20 @@ const tabs = [...navigation, ...tools];
 export function AppShell() {
   const [activeTab, setActiveTab] = useState("library");
   const [collapsed, setCollapsed] = useState(false);
+  const [selectedSheet, setSelectedSheet] = useState<MockSheet | null>(null);
   const activeLabel =
     tabs.find((tab) => tab.value === activeTab)?.label ?? "Library";
+
+  function handleTabChange(value: string) {
+    setActiveTab(value);
+    setSelectedSheet(null);
+  }
 
   return (
     <Tabs
       className="app-shell"
       data-collapsed={collapsed}
-      onValueChange={setActiveTab}
+      onValueChange={handleTabChange}
       orientation="vertical"
       value={activeTab}
     >
@@ -116,9 +125,29 @@ export function AppShell() {
             <BreadcrumbList>
               <BreadcrumbItem>Workspace</BreadcrumbItem>
               <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{activeLabel}</BreadcrumbPage>
-              </BreadcrumbItem>
+              {selectedSheet ? (
+                <>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <button
+                        className="breadcrumb-button"
+                        onClick={() => setSelectedSheet(null)}
+                        type="button"
+                      >
+                        Library
+                      </button>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{selectedSheet.title}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              ) : (
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{activeLabel}</BreadcrumbPage>
+                </BreadcrumbItem>
+              )}
             </BreadcrumbList>
           </Breadcrumb>
         </header>
@@ -131,7 +160,15 @@ export function AppShell() {
               key={value}
               value={value}
             >
-              {value === "library" ? <LibraryView /> : null}
+              {value === "library" && selectedSheet ? (
+                <SheetDetailView
+                  onBack={() => setSelectedSheet(null)}
+                  sheet={selectedSheet}
+                />
+              ) : null}
+              {value === "library" && !selectedSheet ? (
+                <LibraryView onSelectSheet={setSelectedSheet} />
+              ) : null}
             </TabsContent>
           ))}
         </main>

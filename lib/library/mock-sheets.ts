@@ -12,9 +12,9 @@ export type MockSheet = {
 export const mockSheets: MockSheet[] = [
   {
     id: 1,
-    title: "Für Elise",
+    title: "Moonlight Sonata",
     composer: "Ludwig van Beethoven",
-    difficulty: "Intermediate",
+    difficulty: "Advanced",
     status: "In progress",
   },
   {

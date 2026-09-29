@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   mockSheets,
   type Difficulty,
+  type MockSheet,
   type PracticeStatus,
 } from "@/lib/library/mock-sheets";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function LibraryView() {
+type LibraryViewProps = {
+  onSelectSheet: (sheet: MockSheet) => void;
+};
+
+export function LibraryView({ onSelectSheet }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<"all" | Difficulty>("all");
   const [status, setStatus] = useState<"all" | PracticeStatus>("all");
@@ -99,20 +104,28 @@ export function LibraryView() {
       {sheets.length > 0 ? (
         <div className="sheet-grid">
           {sheets.map((sheet) => (
-            <Card className="sheet-card" key={sheet.id} size="sm">
-              <div className="sheet-preview" aria-hidden="true">
-                <FileMusic size={28} strokeWidth={1.4} />
-                <span />
-              </div>
-              <CardHeader>
-                <CardTitle>{sheet.title}</CardTitle>
-                <CardDescription>{sheet.composer}</CardDescription>
-              </CardHeader>
-              <CardFooter className="sheet-card-footer">
-                <Badge variant="outline">{sheet.difficulty}</Badge>
-                <Badge variant="secondary">{sheet.status}</Badge>
-              </CardFooter>
-            </Card>
+            <button
+              aria-label={`Open ${sheet.title}`}
+              className="sheet-card-button"
+              key={sheet.id}
+              onClick={() => onSelectSheet(sheet)}
+              type="button"
+            >
+              <Card className="sheet-card" size="sm">
+                <div className="sheet-preview" aria-hidden="true">
+                  <FileMusic size={28} strokeWidth={1.4} />
+                  <span />
+                </div>
+                <CardHeader>
+                  <CardTitle>{sheet.title}</CardTitle>
+                  <CardDescription>{sheet.composer}</CardDescription>
+                </CardHeader>
+                <CardFooter className="sheet-card-footer">
+                  <Badge variant="outline">{sheet.difficulty}</Badge>
+                  <Badge variant="secondary">{sheet.status}</Badge>
+                </CardFooter>
+              </Card>
+            </button>
           ))}
         </div>
       ) : (
