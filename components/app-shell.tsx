@@ -63,7 +63,8 @@ export function AppShell() {
             className="brand-logo"
             height={32}
             priority
-            src="/pianogo-logo.png"
+            src="/pianogo-logo.svg?v=2"
+            unoptimized
             width={32}
           />
           <span className="brand-name">PianoGo</span>

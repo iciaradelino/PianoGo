@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: "PianoGo",
   description: "Sheet music practice for beginner pianists.",
   icons: {
-    icon: "/pianogo-logo.png",
+    icon: "/pianogo-logo.svg?v=2",
   },
 };
 
