@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
+import { LibraryView } from "./library/library-view";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -129,7 +130,9 @@ export function AppShell() {
               className="workspace-tab-content"
               key={value}
               value={value}
-            />
+            >
+              {value === "library" ? <LibraryView /> : null}
+            </TabsContent>
           ))}
         </main>
       </div>
