@@ -2,11 +2,10 @@
 
 import { FileMusic, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  mockSheets,
-  type Difficulty,
-  type MockSheet,
-  type PracticeStatus,
+import type {
+  Difficulty,
+  MockSheet,
+  PracticeStatus,
 } from "@/lib/library/mock-sheets";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,10 +25,11 @@ import {
 } from "@/components/ui/select";
 
 type LibraryViewProps = {
+  sheets: MockSheet[];
   onSelectSheet: (sheet: MockSheet) => void;
 };
 
-export function LibraryView({ onSelectSheet }: LibraryViewProps) {
+export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<"all" | Difficulty>("all");
   const [status, setStatus] = useState<"all" | PracticeStatus>("all");
@@ -37,7 +37,7 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
   const sheets = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
 
-    return mockSheets.filter((sheet) => {
+    return allSheets.filter((sheet) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         sheet.title.toLocaleLowerCase().includes(normalizedQuery) ||
@@ -48,7 +48,7 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
 
       return matchesQuery && matchesDifficulty && matchesStatus;
     });
-  }, [difficulty, query, status]);
+  }, [allSheets, difficulty, query, status]);
 
   return (
     <section className="library-view">

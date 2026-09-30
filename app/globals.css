@@ -415,6 +415,117 @@ button {
   font-size: 0.875rem;
 }
 
+.upload-view {
+  width: 100%;
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 2rem;
+}
+
+.upload-form {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 28rem);
+}
+
+.upload-dropzone {
+  position: relative;
+  display: grid;
+  min-height: 11rem;
+  place-content: center;
+  justify-items: center;
+  gap: 0.35rem;
+  border: 1px dashed #d4d4d8;
+  border-radius: 0.75rem;
+  background: #fafafa;
+  color: #71717a;
+  text-align: center;
+}
+
+.upload-dropzone[data-dragging="true"],
+.upload-dropzone:focus-within {
+  border-color: #18181b;
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.upload-dropzone p,
+.upload-file p {
+  margin: 0;
+  color: #18181b;
+  font-size: 0.875rem;
+}
+
+.upload-dropzone span,
+.upload-file span {
+  color: #71717a;
+  font-size: 0.75rem;
+}
+
+.upload-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-file {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.5rem 0.75rem 1rem;
+}
+
+.upload-file > svg {
+  flex: 0 0 auto;
+  color: #71717a;
+}
+
+.upload-file > div {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.upload-file p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-form .sheet-field {
+  margin-top: 0;
+}
+
+.upload-form [data-slot="select-trigger"] {
+  width: 100%;
+}
+
+.upload-error,
+.upload-notice {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.upload-error {
+  color: #b91c1c;
+}
+
+.upload-notice {
+  color: #71717a;
+}
+
+.upload-notice button {
+  border: 0;
+  background: transparent;
+  color: #18181b;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .sheet-detail {
   height: calc(100vh - 4rem);
   min-height: 36rem;
@@ -648,7 +759,8 @@ button {
     padding-inline: 0;
   }
 
-  .library-view {
+  .library-view,
+  .upload-view {
     padding: 1.25rem;
   }
 

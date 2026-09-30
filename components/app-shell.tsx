@@ -9,9 +9,10 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
-import type { MockSheet } from "@/lib/library/mock-sheets";
+import { mockSheets, type MockSheet } from "@/lib/library/mock-sheets";
 import { LibraryView } from "./library/library-view";
 import { SheetDetailView } from "./library/sheet-detail-view";
+import { UploadView } from "./library/upload-view";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -40,12 +41,20 @@ export function AppShell() {
   const [activeTab, setActiveTab] = useState("library");
   const [collapsed, setCollapsed] = useState(false);
   const [selectedSheet, setSelectedSheet] = useState<MockSheet | null>(null);
+  const [sheets, setSheets] = useState(mockSheets);
   const activeLabel =
     tabs.find((tab) => tab.value === activeTab)?.label ?? "Library";
 
   function handleTabChange(value: string) {
     setActiveTab(value);
     setSelectedSheet(null);
+  }
+
+  function handleAddSheet(draft: Omit<MockSheet, "id" | "status">) {
+    setSheets((current) => {
+      const id = current.reduce((max, sheet) => Math.max(max, sheet.id), 0) + 1;
+      return [{ ...draft, id, status: "Not started" }, ...current];
+    });
   }
 
   return (
@@ -168,7 +177,13 @@ export function AppShell() {
                 />
               ) : null}
               {value === "library" && !selectedSheet ? (
-                <LibraryView onSelectSheet={setSelectedSheet} />
+                <LibraryView onSelectSheet={setSelectedSheet} sheets={sheets} />
+              ) : null}
+              {value === "upload" ? (
+                <UploadView
+                  onAddSheet={handleAddSheet}
+                  onOpenLibrary={() => handleTabChange("library")}
+                />
               ) : null}
             </TabsContent>
           ))}
