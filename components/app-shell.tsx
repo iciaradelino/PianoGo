@@ -13,6 +13,7 @@ import { mockSheets, type MockSheet } from "@/lib/library/mock-sheets";
 import { LibraryView } from "./library/library-view";
 import { SheetDetailView } from "./library/sheet-detail-view";
 import { UploadView } from "./library/upload-view";
+import { PianoView } from "./piano/piano-view";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -185,6 +186,7 @@ export function AppShell() {
                   onOpenLibrary={() => handleTabChange("library")}
                 />
               ) : null}
+              {value === "piano" ? <PianoView /> : null}
             </TabsContent>
           ))}
         </main>
