@@ -4,9 +4,9 @@ import { FileMusic, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   Difficulty,
-  MockSheet,
   PracticeStatus,
-} from "@/lib/library/mock-sheets";
+  Sheet,
+} from "@/lib/library/model";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -25,11 +25,16 @@ import {
 } from "@/components/ui/select";
 
 type LibraryViewProps = {
-  sheets: MockSheet[];
-  onSelectSheet: (sheet: MockSheet) => void;
+  sheets: Sheet[];
+  loadError?: string;
+  onSelectSheet: (sheet: Sheet) => void;
 };
 
-export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewProps) {
+export function LibraryView({
+  sheets: allSheets,
+  loadError = "",
+  onSelectSheet,
+}: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<"all" | Difficulty>("all");
   const [status, setStatus] = useState<"all" | PracticeStatus>("all");
@@ -101,7 +106,12 @@ export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewPro
         {sheets.length} {sheets.length === 1 ? "sheet" : "sheets"}
       </p>
 
-      {sheets.length > 0 ? (
+      {loadError ? (
+        <div className="library-empty">
+          <FileMusic aria-hidden="true" size={24} strokeWidth={1.4} />
+          <p>{loadError}</p>
+        </div>
+      ) : sheets.length > 0 ? (
         <div className="sheet-grid">
           {sheets.map((sheet) => (
             <button
@@ -131,7 +141,11 @@ export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewPro
       ) : (
         <div className="library-empty">
           <FileMusic aria-hidden="true" size={24} strokeWidth={1.4} />
-          <p>No sheets match these filters.</p>
+          <p>
+            {allSheets.length === 0
+              ? "No sheets yet."
+              : "No sheets match these filters."}
+          </p>
         </div>
       )}
     </section>

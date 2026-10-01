@@ -8,11 +8,12 @@ import {
   Upload,
 } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
-import { mockSheets, type MockSheet } from "@/lib/library/mock-sheets";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Sheet } from "@/lib/library/model";
 import { LibraryView } from "./library/library-view";
 import { SheetDetailView } from "./library/sheet-detail-view";
 import { UploadView } from "./library/upload-view";
+import { PianoView } from "./piano/piano-view";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -40,8 +41,10 @@ const tabs = [...navigation, ...tools];
 export function AppShell() {
   const [activeTab, setActiveTab] = useState("library");
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedSheet, setSelectedSheet] = useState<MockSheet | null>(null);
-  const [sheets, setSheets] = useState(mockSheets);
+  const [selectedSheet, setSelectedSheet] = useState<Sheet | null>(null);
+  const [sheets, setSheets] = useState<Sheet[] | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const loadVersion = useRef(0);
   const activeLabel =
     tabs.find((tab) => tab.value === activeTab)?.label ?? "Library";
 
@@ -50,12 +53,29 @@ export function AppShell() {
     setSelectedSheet(null);
   }
 
-  function handleAddSheet(draft: Omit<MockSheet, "id" | "status">) {
-    setSheets((current) => {
-      const id = current.reduce((max, sheet) => Math.max(max, sheet.id), 0) + 1;
-      return [{ ...draft, id, status: "Not started" }, ...current];
-    });
-  }
+  const loadSheets = useCallback(() => {
+    const version = ++loadVersion.current;
+
+    fetch("/api/sheets")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load sheets.");
+        return (await response.json()) as Sheet[];
+      })
+      .then((rows) => {
+        if (version !== loadVersion.current) return;
+        setLoadError("");
+        setSheets(rows);
+      })
+      .catch(() => {
+        if (version !== loadVersion.current) return;
+        setLoadError("Could not load sheets.");
+        setSheets([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    loadSheets();
+  }, [loadSheets]);
 
   return (
     <Tabs
@@ -173,18 +193,41 @@ export function AppShell() {
               {value === "library" && selectedSheet ? (
                 <SheetDetailView
                   onBack={() => setSelectedSheet(null)}
+                  onDelete={(id) => {
+                    setSelectedSheet(null);
+                    setSheets(
+                      (current) =>
+                        current?.filter((sheet) => sheet.id !== id) ?? current,
+                    );
+                  }}
+                  onUpdate={(next) => {
+                    setSelectedSheet(next);
+                    setSheets(
+                      (current) =>
+                        current?.map((sheet) =>
+                          sheet.id === next.id ? next : sheet,
+                        ) ?? current,
+                    );
+                  }}
                   sheet={selectedSheet}
                 />
               ) : null}
-              {value === "library" && !selectedSheet ? (
-                <LibraryView onSelectSheet={setSelectedSheet} sheets={sheets} />
+              {value === "library" && !selectedSheet && sheets ? (
+                <LibraryView
+                  loadError={loadError}
+                  onSelectSheet={setSelectedSheet}
+                  sheets={sheets}
+                />
               ) : null}
               {value === "upload" ? (
                 <UploadView
-                  onAddSheet={handleAddSheet}
                   onOpenLibrary={() => handleTabChange("library")}
+                  onUploaded={() => {
+                    void loadSheets();
+                  }}
                 />
               ) : null}
+              {value === "piano" ? <PianoView /> : null}
             </TabsContent>
           ))}
         </main>

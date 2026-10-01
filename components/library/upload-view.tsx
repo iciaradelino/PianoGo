@@ -2,7 +2,12 @@
 
 import { FileMusic, Upload, X } from "lucide-react";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
-import type { Difficulty } from "@/lib/library/mock-sheets";
+import {
+  acceptedExtensions,
+  fileKind,
+  type Difficulty,
+  type FileType,
+} from "@/lib/library/model";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,30 +18,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const acceptedExtensions = [".pdf", ".musicxml", ".xml", ".mxl"];
-
-type SheetDraft = {
-  title: string;
-  composer: string;
-  difficulty: Difficulty;
-};
-
 type UploadViewProps = {
-  onAddSheet: (sheet: SheetDraft) => void;
+  onUploaded: () => void;
   onOpenLibrary: () => void;
 };
 
-function fileKind(name: string) {
-  const lower = name.toLocaleLowerCase();
-  if (lower.endsWith(".pdf")) return "PDF";
-  if (
-    lower.endsWith(".musicxml") ||
-    lower.endsWith(".xml") ||
-    lower.endsWith(".mxl")
-  ) {
-    return "MusicXML";
-  }
-  return null;
+function fileLabel(kind: FileType) {
+  return kind === "pdf" ? "PDF" : "MusicXML";
 }
 
 function titleFromFileName(name: string) {
@@ -50,17 +38,18 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
+export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [file, setFile] = useState<File | null>(null);
-  const [kind, setKind] = useState<string | null>(null);
+  const [kind, setKind] = useState<FileType | null>(null);
   const [dragging, setDragging] = useState(false);
   const [title, setTitle] = useState("");
   const [composer, setComposer] = useState("");
   const [difficulty, setDifficulty] = useState<Difficulty>("Beginner");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
 
   function acceptFile(next: File) {
     const nextKind = fileKind(next.name);
@@ -110,8 +99,9 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
     if (next) acceptFile(next);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     if (!file || !kind) {
       setError("Choose a PDF or MusicXML file.");
       return;
@@ -123,17 +113,35 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
       return;
     }
 
-    onAddSheet({
-      title: trimmedTitle,
-      composer: composer.trim() || "Unknown",
-      difficulty,
-    });
-    clearFile();
-    setTitle("");
-    setComposer("");
-    setDifficulty("Beginner");
+    const body = new FormData();
+    body.set("file", file);
+    body.set("title", trimmedTitle);
+    body.set("composer", composer.trim());
+    body.set("difficulty", difficulty);
+
+    setSaving(true);
     setError("");
-    setNotice(`${trimmedTitle} added to your library.`);
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/sheets", { method: "POST", body });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "Could not add this sheet.");
+        return;
+      }
+
+      onUploaded();
+      clearFile();
+      setTitle("");
+      setComposer("");
+      setDifficulty("Beginner");
+      setNotice(`${trimmedTitle} added to your library.`);
+    } catch {
+      setError("Could not add this sheet.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -145,11 +153,12 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
             <div>
               <p>{file.name}</p>
               <span>
-                {kind} · {formatFileSize(file.size)}
+                {fileLabel(kind)} · {formatFileSize(file.size)}
               </span>
             </div>
             <Button
               aria-label="Remove file"
+              disabled={saving}
               onClick={clearFile}
               size="icon"
               type="button"
@@ -228,7 +237,9 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
           </p>
         ) : null}
 
-        <Button type="submit">Add to library</Button>
+        <Button disabled={saving} type="submit">
+          {saving ? "Adding…" : "Add to library"}
+        </Button>
       </form>
     </section>
   );
