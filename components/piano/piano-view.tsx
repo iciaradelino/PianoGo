@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { playPianoNote } from "./play-note";
 
 const NAMES = [
   "do",
@@ -151,6 +152,7 @@ export function PianoView() {
       return;
     }
     setSelectedMidi(midi);
+    playPianoNote(midi);
   }
 
   return (
