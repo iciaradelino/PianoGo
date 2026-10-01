@@ -1,0 +1,46 @@
+let audio: AudioContext | null = null;
+
+function audioContext() {
+  if (!audio) audio = new AudioContext();
+  return audio;
+}
+
+function frequency(midi: number) {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
+export function playPianoNote(midi: number) {
+  if (typeof window === "undefined" || !window.AudioContext) return;
+
+  const context = audioContext();
+  void context.resume();
+
+  const duration = 1.5;
+  const sampleRate = context.sampleRate;
+  const length = Math.floor(sampleRate * duration);
+  const buffer = context.createBuffer(1, length, sampleRate);
+  const data = buffer.getChannelData(0);
+  const fundamental = frequency(midi);
+  const partials = [1, 2, 3, 4, 5];
+  const weights = [1, 0.55, 0.28, 0.14, 0.07];
+
+  for (let index = 0; index < length; index += 1) {
+    const time = index / sampleRate;
+    let sample = 0;
+
+    for (let partial = 0; partial < partials.length; partial += 1) {
+      const harmonic = partials[partial];
+      const stretched = fundamental * harmonic * (1 + 0.00015 * harmonic * harmonic);
+      const decay = Math.exp(-time * (2.4 + harmonic * 1.8));
+      sample += Math.sin(2 * Math.PI * stretched * time) * weights[partial] * decay;
+    }
+
+    const hammer = (Math.random() * 2 - 1) * Math.exp(-time * 90) * 0.12;
+    data[index] = (sample + hammer) * 0.22;
+  }
+
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(context.destination);
+  source.start();
+}

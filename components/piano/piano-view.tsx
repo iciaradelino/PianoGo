@@ -1,8 +1,11 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileMusic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { SheetScoreViewer } from "@/components/library/sheet-score-viewer";
 import { Button } from "@/components/ui/button";
+import type { Sheet } from "@/lib/library/model";
+import { playPianoNote } from "./play-note";
 
 const NAMES = [
   "do",
@@ -67,27 +70,34 @@ function clampWindow(start: number, visibleCount: number) {
   );
 }
 
-function useVisibleWhiteKeys() {
-  const [count, setCount] = useState(21);
+function useVisibleWhiteKeys(compact: boolean) {
+  const [isNarrow, setIsNarrow] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 48rem)");
-    const update = () => setCount(media.matches ? 14 : 21);
+    const update = () => setIsNarrow(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
 
-  return count;
+  return compact || isNarrow ? 14 : 21;
 }
 
-export function PianoView() {
-  const visibleCount = useVisibleWhiteKeys();
+type PianoViewProps = {
+  sheet?: Sheet | null;
+  sheets: Sheet[];
+  onOpenSheet: (sheet: Sheet) => void;
+};
+
+export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
+  const visibleCount = useVisibleWhiteKeys(Boolean(sheet));
   const [selectedMidi, setSelectedMidi] = useState(60);
   const [windowStart, setWindowStart] = useState(() =>
     clampWindow(MIDDLE_WHITE_INDEX - 10, 21),
   );
   const [dragging, setDragging] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const drag = useRef({ id: -1, x: 0, origin: 0, moved: false });
   const selectedKey = PIANO_KEYS[selectedMidi - FIRST_MIDI];
   const visibleStart = clampWindow(windowStart, visibleCount);
@@ -151,15 +161,58 @@ export function PianoView() {
       return;
     }
     setSelectedMidi(midi);
+    playPianoNote(midi);
   }
 
   return (
-    <section className="piano-view">
+    <section
+      className={sheet ? "piano-view piano-view-with-sheet" : "piano-view"}
+    >
+      {sheet ? (
+        <aside className="piano-sheet" aria-label={`${sheet.title} sheet music`}>
+          <div className="piano-sheet-canvas">
+            <SheetScoreViewer sheet={sheet} />
+          </div>
+        </aside>
+      ) : null}
       <div className="piano-stage">
         <div className="selected-note">
-          <span>Selected note</span>
-          <strong aria-live="polite">{selectedKey.label}</strong>
+          <Button
+            aria-expanded={pickerOpen}
+            onClick={() => setPickerOpen((open) => !open)}
+            size="sm"
+            variant="outline"
+          >
+            <FileMusic aria-hidden="true" />
+            Open sheet
+          </Button>
+          <div className="selected-note-readout">
+            <span>Selected note</span>
+            <strong aria-live="polite">{selectedKey.label}</strong>
+          </div>
         </div>
+        {pickerOpen ? (
+          <div className="sheet-picker">
+            {sheets.length > 0 ? (
+              sheets.map((item) => (
+                <button
+                  aria-pressed={sheet?.id === item.id}
+                  key={item.id}
+                  onClick={() => {
+                    onOpenSheet(item);
+                    setPickerOpen(false);
+                  }}
+                  type="button"
+                >
+                  <span>{item.title}</span>
+                  <span>{item.composer}</span>
+                </button>
+              ))
+            ) : (
+              <p>No sheets in the library yet.</p>
+            )}
+          </div>
+        ) : null}
 
         <div className="keyboard-frame">
           <div className="keyboard-row">

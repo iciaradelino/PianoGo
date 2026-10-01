@@ -6,6 +6,7 @@ import {
   Minus,
   MousePointerClick,
   Pencil,
+  Piano,
   Plus,
   Printer,
   Sparkles,
@@ -29,6 +30,7 @@ const zoomSteps = [0.75, 1, 1.25, 1.5];
 type SheetDetailViewProps = {
   sheet: Sheet;
   onBack: () => void;
+  onOpenInPiano: () => void;
   onUpdate: (sheet: Sheet) => void;
   onDelete: (id: number) => void;
 };
@@ -36,6 +38,7 @@ type SheetDetailViewProps = {
 export function SheetDetailView({
   sheet,
   onBack,
+  onOpenInPiano,
   onUpdate,
   onDelete,
 }: SheetDetailViewProps) {
@@ -382,6 +385,16 @@ export function SheetDetailView({
               <Button type="button" variant="outline">
                 <MousePointerClick aria-hidden="true" />
                 Add manually
+              </Button>
+            </div>
+          </section>
+
+          <section>
+            <h2>Piano</h2>
+            <div className="annotation-actions">
+              <Button onClick={onOpenInPiano} type="button" variant="outline">
+                <Piano aria-hidden="true" />
+                Open in Piano
               </Button>
             </div>
           </section>

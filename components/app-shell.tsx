@@ -53,6 +53,10 @@ export function AppShell() {
     setSelectedSheet(null);
   }
 
+  function handleOpenInPiano() {
+    setActiveTab("piano");
+  }
+
   const loadSheets = useCallback(() => {
     const version = ++loadVersion.current;
 
@@ -164,7 +168,7 @@ export function AppShell() {
                         onClick={() => setSelectedSheet(null)}
                         type="button"
                       >
-                        Library
+                        {activeLabel}
                       </button>
                     </BreadcrumbLink>
                   </BreadcrumbItem>
@@ -209,6 +213,7 @@ export function AppShell() {
                         ) ?? current,
                     );
                   }}
+                  onOpenInPiano={handleOpenInPiano}
                   sheet={selectedSheet}
                 />
               ) : null}
@@ -227,7 +232,13 @@ export function AppShell() {
                   }}
                 />
               ) : null}
-              {value === "piano" ? <PianoView /> : null}
+              {value === "piano" ? (
+                <PianoView
+                  onOpenSheet={setSelectedSheet}
+                  sheet={selectedSheet}
+                  sheets={sheets ?? []}
+                />
+              ) : null}
             </TabsContent>
           ))}
         </main>
