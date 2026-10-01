@@ -25,6 +25,11 @@ type SheetRow = {
 const sheetColumns = `id, title, composer, difficulty, practice_status AS status,
   file_type AS fileType`;
 
+export function sheetPreviewPath(id: number) {
+  if (!Number.isInteger(id) || id < 1) return null;
+  return path.join(dataDir(), "previews", `${id}.png`);
+}
+
 function storedFilePath(filePath: string) {
   const uploadsDir = path.resolve(dataDir(), "uploads");
   const absolute = path.resolve(dataDir(), filePath);
@@ -119,8 +124,10 @@ export function deleteSheet(id: number) {
   if (!row) return false;
 
   const absolute = storedFilePath(row.file_path);
+  const preview = sheetPreviewPath(id);
   const result = getDb().prepare(`DELETE FROM sheets WHERE id = ?`).run(id);
   if (absolute) fs.rmSync(absolute, { force: true });
+  if (preview) fs.rmSync(preview, { force: true });
   return result.changes > 0;
 }
 

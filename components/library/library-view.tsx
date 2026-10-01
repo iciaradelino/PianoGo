@@ -24,6 +24,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+function SheetPreview({ sheet }: { sheet: Sheet }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = sheet.fileType === "pdf" && !failed;
+
+  return (
+    <div className="sheet-preview" aria-hidden="true">
+      {showImage ? (
+        <img
+          alt=""
+          className="sheet-preview-image"
+          onError={() => setFailed(true)}
+          src={`/api/sheets/${sheet.id}/preview`}
+        />
+      ) : (
+        <FileMusic size={28} strokeWidth={1.4} />
+      )}
+    </div>
+  );
+}
+
 type LibraryViewProps = {
   sheets: Sheet[];
   loadError?: string;
@@ -122,10 +142,7 @@ export function LibraryView({
               type="button"
             >
               <Card className="sheet-card" size="sm">
-                <div className="sheet-preview" aria-hidden="true">
-                  <FileMusic size={28} strokeWidth={1.4} />
-                  <span />
-                </div>
+                <SheetPreview sheet={sheet} />
                 <CardHeader>
                   <CardTitle>{sheet.title}</CardTitle>
                   <CardDescription>{sheet.composer}</CardDescription>
