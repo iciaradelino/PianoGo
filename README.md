@@ -169,7 +169,7 @@ Do **not** add: `Dockerfile`, `docker-compose.yml`, `.github/workflows/`, Terraf
 
 ## Setup
 
-Needs Node.js 20+. No `.env` file required.
+Needs Node.js 22+. No `.env` file required.
 
 ```bash
 git clone <this-repo>

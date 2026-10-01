@@ -2,12 +2,11 @@
 
 import { FileMusic, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  mockSheets,
-  type Difficulty,
-  type MockSheet,
-  type PracticeStatus,
-} from "@/lib/library/mock-sheets";
+import type {
+  Difficulty,
+  PracticeStatus,
+  Sheet,
+} from "@/lib/library/model";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -25,11 +24,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+function SheetPreview({ sheet }: { sheet: Sheet }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = sheet.fileType === "pdf" && !failed;
+
+  return (
+    <div className="sheet-preview" aria-hidden="true">
+      {showImage ? (
+        <img
+          alt=""
+          className="sheet-preview-image"
+          onError={() => setFailed(true)}
+          src={`/api/sheets/${sheet.id}/preview`}
+        />
+      ) : (
+        <FileMusic size={28} strokeWidth={1.4} />
+      )}
+    </div>
+  );
+}
+
 type LibraryViewProps = {
-  onSelectSheet: (sheet: MockSheet) => void;
+  sheets: Sheet[];
+  loadError?: string;
+  onSelectSheet: (sheet: Sheet) => void;
 };
 
-export function LibraryView({ onSelectSheet }: LibraryViewProps) {
+export function LibraryView({
+  sheets: allSheets,
+  loadError = "",
+  onSelectSheet,
+}: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<"all" | Difficulty>("all");
   const [status, setStatus] = useState<"all" | PracticeStatus>("all");
@@ -37,7 +62,7 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
   const sheets = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
 
-    return mockSheets.filter((sheet) => {
+    return allSheets.filter((sheet) => {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         sheet.title.toLocaleLowerCase().includes(normalizedQuery) ||
@@ -48,7 +73,7 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
 
       return matchesQuery && matchesDifficulty && matchesStatus;
     });
-  }, [difficulty, query, status]);
+  }, [allSheets, difficulty, query, status]);
 
   return (
     <section className="library-view">
@@ -101,7 +126,12 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
         {sheets.length} {sheets.length === 1 ? "sheet" : "sheets"}
       </p>
 
-      {sheets.length > 0 ? (
+      {loadError ? (
+        <div className="library-empty">
+          <FileMusic aria-hidden="true" size={24} strokeWidth={1.4} />
+          <p>{loadError}</p>
+        </div>
+      ) : sheets.length > 0 ? (
         <div className="sheet-grid">
           {sheets.map((sheet) => (
             <button
@@ -112,10 +142,7 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
               type="button"
             >
               <Card className="sheet-card" size="sm">
-                <div className="sheet-preview" aria-hidden="true">
-                  <FileMusic size={28} strokeWidth={1.4} />
-                  <span />
-                </div>
+                <SheetPreview sheet={sheet} />
                 <CardHeader>
                   <CardTitle>{sheet.title}</CardTitle>
                   <CardDescription>{sheet.composer}</CardDescription>
@@ -131,7 +158,11 @@ export function LibraryView({ onSelectSheet }: LibraryViewProps) {
       ) : (
         <div className="library-empty">
           <FileMusic aria-hidden="true" size={24} strokeWidth={1.4} />
-          <p>No sheets match these filters.</p>
+          <p>
+            {allSheets.length === 0
+              ? "No sheets yet."
+              : "No sheets match these filters."}
+          </p>
         </div>
       )}
     </section>
