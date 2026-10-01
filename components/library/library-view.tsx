@@ -29,6 +29,24 @@ type LibraryViewProps = {
   onSelectSheet: (sheet: Sheet) => void;
 };
 
+function SheetPreview({ sheetId }: { sheetId: number }) {
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <div className="sheet-preview" aria-hidden="true">
+      {failed ? (
+        <FileMusic size={28} strokeWidth={1.4} />
+      ) : (
+        <img
+          alt=""
+          onError={() => setFailed(true)}
+          src={`/api/sheets/${sheetId}/preview`}
+        />
+      )}
+    </div>
+  );
+}
+
 export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewProps) {
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<"all" | Difficulty>("all");
@@ -112,10 +130,7 @@ export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewPro
               type="button"
             >
               <Card className="sheet-card" size="sm">
-                <div className="sheet-preview" aria-hidden="true">
-                  <FileMusic size={28} strokeWidth={1.4} />
-                  <span />
-                </div>
+                <SheetPreview sheetId={sheet.id} />
                 <CardHeader>
                   <CardTitle>{sheet.title}</CardTitle>
                   <CardDescription>{sheet.composer}</CardDescription>

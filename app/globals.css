@@ -361,7 +361,7 @@ button {
 .sheet-preview {
   position: relative;
   display: grid;
-  height: 9rem;
+  height: 12rem;
   margin: 0 0.75rem;
   place-items: center;
   overflow: hidden;
@@ -376,6 +376,17 @@ button {
       #fafafa 1.45rem
     );
   color: #71717a;
+}
+
+.sheet-preview img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  background: #fff;
+  pointer-events: none;
 }
 
 .sheet-preview > svg {
@@ -527,81 +538,63 @@ button {
 }
 
 .piano-view {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 90rem;
-  margin: 0 auto;
-  padding: 1.5rem 2rem 3rem;
+  height: calc(100vh - 4rem);
+  margin: 0;
+  padding: 0;
 }
 
 .piano-view-with-sheet {
   display: grid;
-  grid-template-columns: minmax(18rem, 0.8fr) minmax(30rem, 1.2fr);
-  align-items: start;
-  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1.15fr) minmax(22rem, 0.85fr);
+  align-items: stretch;
+  gap: 0;
   max-width: none;
   height: calc(100vh - 4rem);
+  margin: 0;
   overflow: hidden;
-  padding-bottom: 1.5rem;
+  padding: 0;
 }
 
 .piano-sheet {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-  overflow: hidden;
-  border: 1px solid #e4e4e7;
-  border-radius: 1rem;
-  background: #ffffff;
-  box-shadow: 0 12px 36px rgb(24 24 27 / 6%);
-}
-
-.piano-sheet-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 5rem;
-  border-bottom: 1px solid #e4e4e7;
-  padding: 1rem 1.25rem;
-}
-
-.piano-sheet-heading > div {
   min-width: 0;
-}
-
-.piano-sheet-heading h1,
-.piano-sheet-heading p {
   overflow: hidden;
-  margin: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.piano-sheet-heading h1 {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.piano-sheet-heading p,
-.piano-sheet-heading > span {
-  color: #71717a;
-  font-size: 0.75rem;
-}
-
-.piano-sheet-heading p {
-  margin-top: 0.25rem;
-}
-
-.piano-sheet-heading > span {
-  flex: 0 0 auto;
+  border-right: 1px solid #e4e4e7;
+  background: #ffffff;
 }
 
 .piano-sheet-canvas {
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.piano-view-with-sheet .sheet-document-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.piano-view-with-sheet .piano-stage {
+  min-height: 0;
   overflow: auto;
-  padding: 1rem;
-  background: #e4e4e7;
+}
+
+.piano-view-with-sheet .keyboard-frame {
+  padding: 1rem 0.75rem 0.5rem;
+}
+
+.piano-view-with-sheet .piano-keyboard {
+  --white-key-ratio: 7.4;
+  height: auto;
+  aspect-ratio: calc(var(--visible-white-keys) / var(--white-key-ratio));
 }
 
 .sheet-document-frame {
@@ -634,21 +627,71 @@ button {
 }
 
 .piano-stage {
-  overflow: hidden;
-  border: 1px solid #e4e4e7;
-  border-radius: 1rem;
-  background: #fafafa;
-  box-shadow: 0 12px 36px rgb(24 24 27 / 6%);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
 }
 
 .selected-note {
   display: flex;
-  align-items: baseline;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
   min-height: 5rem;
+  background: #ffffff;
+  padding: 1rem 1.25rem;
+}
+
+.selected-note-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.sheet-picker {
+  flex: 0 0 auto;
+  max-height: 16rem;
+  overflow: auto;
   border-bottom: 1px solid #e4e4e7;
   background: #ffffff;
-  padding: 1.25rem 1.5rem;
+}
+
+.sheet-picker button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 0;
+  border-bottom: 1px solid #f4f4f5;
+  background: transparent;
+  padding: 0.75rem 1.25rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet-picker button:hover,
+.sheet-picker button[aria-pressed="true"] {
+  background: #f5f3ff;
+}
+
+.sheet-picker button span:last-child,
+.sheet-picker p {
+  color: #71717a;
+  font-size: 0.75rem;
+}
+
+.sheet-picker p {
+  margin: 0;
+  padding: 0.75rem 1.25rem;
 }
 
 .selected-note span {
@@ -667,10 +710,13 @@ button {
 }
 
 .keyboard-frame {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
   padding: clamp(1rem, 3vw, 2rem);
-  background:
-    radial-gradient(circle at 50% 0, rgb(124 58 237 / 6%), transparent 45%),
-    #f4f4f5;
+  background: #ffffff;
 }
 
 .keyboard-row {
@@ -806,6 +852,10 @@ button {
 }
 
 .keyboard-overview {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex: 0 0 auto;
   background: #ffffff;
   padding: 1.25rem 1.5rem 1.5rem;
 }
@@ -1066,7 +1116,9 @@ button {
   }
 
   .piano-sheet {
-    height: min(42rem, calc(100vh - 7rem));
+    height: min(70vh, 42rem);
+    border-right: 0;
+    border-bottom: 1px solid #e4e4e7;
   }
 }
 
@@ -1099,8 +1151,7 @@ button {
   }
 
   .library-view,
-  .upload-view,
-  .piano-view {
+  .upload-view {
     padding: 1.25rem;
   }
 

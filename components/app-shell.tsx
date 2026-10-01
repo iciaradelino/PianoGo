@@ -212,7 +212,13 @@ export function AppShell({ initialSheets }: AppShellProps) {
                   onOpenLibrary={() => handleTabChange("library")}
                 />
               ) : null}
-              {value === "piano" ? <PianoView sheet={selectedSheet} /> : null}
+              {value === "piano" ? (
+                <PianoView
+                  onOpenSheet={setSelectedSheet}
+                  sheet={selectedSheet}
+                  sheets={sheets}
+                />
+              ) : null}
             </TabsContent>
           ))}
         </main>
