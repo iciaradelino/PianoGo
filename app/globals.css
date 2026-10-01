@@ -533,6 +533,106 @@ button {
   padding: 1.5rem 2rem 3rem;
 }
 
+.piano-view-with-sheet {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.8fr) minmax(30rem, 1.2fr);
+  align-items: start;
+  gap: 1.25rem;
+  max-width: none;
+  height: calc(100vh - 4rem);
+  overflow: hidden;
+  padding-bottom: 1.5rem;
+}
+
+.piano-sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #e4e4e7;
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 12px 36px rgb(24 24 27 / 6%);
+}
+
+.piano-sheet-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 5rem;
+  border-bottom: 1px solid #e4e4e7;
+  padding: 1rem 1.25rem;
+}
+
+.piano-sheet-heading > div {
+  min-width: 0;
+}
+
+.piano-sheet-heading h1,
+.piano-sheet-heading p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.piano-sheet-heading h1 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.piano-sheet-heading p,
+.piano-sheet-heading > span {
+  color: #71717a;
+  font-size: 0.75rem;
+}
+
+.piano-sheet-heading p {
+  margin-top: 0.25rem;
+}
+
+.piano-sheet-heading > span {
+  flex: 0 0 auto;
+}
+
+.piano-sheet-canvas {
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+  background: #e4e4e7;
+}
+
+.sheet-document-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 32rem;
+  border: 0;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 10%);
+}
+
+.sheet-document-fallback {
+  display: grid;
+  min-height: 20rem;
+  place-content: center;
+  justify-items: center;
+  color: #71717a;
+  text-align: center;
+}
+
+.sheet-document-fallback p {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.sheet-document-fallback a {
+  color: #6d28d9;
+  font-size: 0.8125rem;
+  text-underline-offset: 0.15em;
+}
+
 .piano-stage {
   overflow: hidden;
   border: 1px solid #e4e4e7;
@@ -861,11 +961,10 @@ button {
   background: #e4e4e7;
 }
 
-.score-page {
+.score-canvas .sheet-document-frame {
   width: min(100%, 50rem);
-  height: auto;
+  height: 100%;
   align-self: flex-start;
-  box-shadow: 0 4px 18px rgb(0 0 0 / 10%);
 }
 
 .sheet-inspector {
@@ -958,6 +1057,16 @@ button {
     overflow: visible;
     border-top: 1px solid #e4e4e7;
     border-left: 0;
+  }
+
+  .piano-view-with-sheet {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    overflow: visible;
+  }
+
+  .piano-sheet {
+    height: min(42rem, calc(100vh - 7rem));
   }
 }
 

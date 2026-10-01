@@ -2,7 +2,7 @@
 
 import { FileMusic, Upload, X } from "lucide-react";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
-import type { Difficulty } from "@/lib/library/mock-sheets";
+import type { Difficulty, SheetDraft } from "@/lib/library/model";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,14 +15,8 @@ import {
 
 const acceptedExtensions = [".pdf", ".musicxml", ".xml", ".mxl"];
 
-type SheetDraft = {
-  title: string;
-  composer: string;
-  difficulty: Difficulty;
-};
-
 type UploadViewProps = {
-  onAddSheet: (sheet: SheetDraft) => void;
+  onAddSheet: (sheet: SheetDraft) => Promise<void>;
   onOpenLibrary: () => void;
 };
 
@@ -61,6 +55,7 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
   const [difficulty, setDifficulty] = useState<Difficulty>("Beginner");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   function acceptFile(next: File) {
     const nextKind = fileKind(next.name);
@@ -110,7 +105,7 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
     if (next) acceptFile(next);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!file || !kind) {
       setError("Choose a PDF or MusicXML file.");
@@ -123,17 +118,27 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
       return;
     }
 
-    onAddSheet({
-      title: trimmedTitle,
-      composer: composer.trim() || "Unknown",
-      difficulty,
-    });
-    clearFile();
-    setTitle("");
-    setComposer("");
-    setDifficulty("Beginner");
+    setSubmitting(true);
     setError("");
-    setNotice(`${trimmedTitle} added to your library.`);
+    try {
+      await onAddSheet({
+        title: trimmedTitle,
+        composer: composer.trim() || "Unknown",
+        difficulty,
+        file,
+      });
+      clearFile();
+      setTitle("");
+      setComposer("");
+      setDifficulty("Beginner");
+      setNotice(`${trimmedTitle} added to your library.`);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "The sheet could not be saved.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -228,7 +233,9 @@ export function UploadView({ onAddSheet, onOpenLibrary }: UploadViewProps) {
           </p>
         ) : null}
 
-        <Button type="submit">Add to library</Button>
+        <Button disabled={submitting} type="submit">
+          {submitting ? "Adding..." : "Add to library"}
+        </Button>
       </form>
     </section>
   );

@@ -6,14 +6,15 @@ import {
   Minus,
   MousePointerClick,
   Pencil,
+  Piano,
   Plus,
   Printer,
   Sparkles,
 } from "lucide-react";
-import Image from "next/image";
 import { useState } from "react";
-import type { MockSheet } from "@/lib/library/mock-sheets";
+import type { Sheet } from "@/lib/library/model";
 import { Button } from "@/components/ui/button";
+import { SheetScoreViewer } from "./sheet-score-viewer";
 import {
   Select,
   SelectContent,
@@ -24,11 +25,16 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 type SheetDetailViewProps = {
-  sheet: MockSheet;
+  sheet: Sheet;
   onBack: () => void;
+  onOpenInPiano: () => void;
 };
 
-export function SheetDetailView({ sheet, onBack }: SheetDetailViewProps) {
+export function SheetDetailView({
+  sheet,
+  onBack,
+  onOpenInPiano,
+}: SheetDetailViewProps) {
   const [annotationsVisible, setAnnotationsVisible] = useState(true);
 
   return (
@@ -36,7 +42,7 @@ export function SheetDetailView({ sheet, onBack }: SheetDetailViewProps) {
       <div className="sheet-detail-body">
         <div className="score-viewer">
           <div className="score-toolbar">
-            <span className="score-page-count">Page 1 of 23</span>
+            <span className="score-page-count">{sheet.originalFilename}</span>
             <div className="zoom-controls">
               <Button aria-label="Zoom out" size="icon-sm" variant="ghost">
                 <Minus aria-hidden="true" />
@@ -49,13 +55,7 @@ export function SheetDetailView({ sheet, onBack }: SheetDetailViewProps) {
           </div>
 
           <div className="score-canvas">
-            <Image
-              alt={`First page of ${sheet.title}`}
-              className="score-page"
-              height={1263}
-              src="/sheets/moonlight-sonata-page-1.png"
-              width={893}
-            />
+            <SheetScoreViewer sheet={sheet} />
           </div>
         </div>
 
@@ -81,8 +81,10 @@ export function SheetDetailView({ sheet, onBack }: SheetDetailViewProps) {
                 <Pencil aria-hidden="true" />
                 Rename
               </Button>
-              <Button aria-label="Download sheet" size="icon" variant="outline">
-                <Download aria-hidden="true" />
+              <Button asChild aria-label="Download sheet" size="icon" variant="outline">
+                <a download href={`/api/sheets/${sheet.id}/file`}>
+                  <Download aria-hidden="true" />
+                </a>
               </Button>
               <Button aria-label="Print sheet" size="icon" variant="outline">
                 <Printer aria-hidden="true" />
@@ -141,6 +143,16 @@ export function SheetDetailView({ sheet, onBack }: SheetDetailViewProps) {
               <Button variant="outline">
                 <MousePointerClick aria-hidden="true" />
                 Add manually
+              </Button>
+            </div>
+          </section>
+
+          <section>
+            <h2>Piano</h2>
+            <div className="annotation-actions">
+              <Button onClick={onOpenInPiano} variant="outline">
+                <Piano aria-hidden="true" />
+                Open in Piano
               </Button>
             </div>
           </section>

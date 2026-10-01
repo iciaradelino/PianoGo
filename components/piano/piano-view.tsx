@@ -2,7 +2,9 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { SheetScoreViewer } from "@/components/library/sheet-score-viewer";
 import { Button } from "@/components/ui/button";
+import type { Sheet } from "@/lib/library/model";
 import { playPianoNote } from "./play-note";
 
 const NAMES = [
@@ -68,22 +70,26 @@ function clampWindow(start: number, visibleCount: number) {
   );
 }
 
-function useVisibleWhiteKeys() {
-  const [count, setCount] = useState(21);
+function useVisibleWhiteKeys(compact: boolean) {
+  const [isNarrow, setIsNarrow] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 48rem)");
-    const update = () => setCount(media.matches ? 14 : 21);
+    const update = () => setIsNarrow(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
 
-  return count;
+  return compact || isNarrow ? 14 : 21;
 }
 
-export function PianoView() {
-  const visibleCount = useVisibleWhiteKeys();
+type PianoViewProps = {
+  sheet?: Sheet | null;
+};
+
+export function PianoView({ sheet }: PianoViewProps) {
+  const visibleCount = useVisibleWhiteKeys(Boolean(sheet));
   const [selectedMidi, setSelectedMidi] = useState(60);
   const [windowStart, setWindowStart] = useState(() =>
     clampWindow(MIDDLE_WHITE_INDEX - 10, 21),
@@ -156,7 +162,23 @@ export function PianoView() {
   }
 
   return (
-    <section className="piano-view">
+    <section
+      className={sheet ? "piano-view piano-view-with-sheet" : "piano-view"}
+    >
+      {sheet ? (
+        <aside className="piano-sheet" aria-label={`${sheet.title} sheet music`}>
+          <header className="piano-sheet-heading">
+            <div>
+              <h1>{sheet.title}</h1>
+              <p>{sheet.composer}</p>
+            </div>
+            <span>{sheet.originalFilename}</span>
+          </header>
+          <div className="piano-sheet-canvas">
+            <SheetScoreViewer sheet={sheet} />
+          </div>
+        </aside>
+      ) : null}
       <div className="piano-stage">
         <div className="selected-note">
           <span>Selected note</span>

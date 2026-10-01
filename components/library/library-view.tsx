@@ -4,9 +4,9 @@ import { FileMusic, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   Difficulty,
-  MockSheet,
   PracticeStatus,
-} from "@/lib/library/mock-sheets";
+  Sheet,
+} from "@/lib/library/model";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/select";
 
 type LibraryViewProps = {
-  sheets: MockSheet[];
-  onSelectSheet: (sheet: MockSheet) => void;
+  sheets: Sheet[];
+  onSelectSheet: (sheet: Sheet) => void;
 };
 
 export function LibraryView({ sheets: allSheets, onSelectSheet }: LibraryViewProps) {

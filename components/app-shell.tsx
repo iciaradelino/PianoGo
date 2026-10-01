@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
-import { mockSheets, type MockSheet } from "@/lib/library/mock-sheets";
+import type { Sheet, SheetDraft } from "@/lib/library/model";
 import { LibraryView } from "./library/library-view";
 import { SheetDetailView } from "./library/sheet-detail-view";
 import { UploadView } from "./library/upload-view";
@@ -38,11 +38,15 @@ const navigation = [
 const tools = [{ value: "piano", label: "Piano", icon: Piano }];
 const tabs = [...navigation, ...tools];
 
-export function AppShell() {
+type AppShellProps = {
+  initialSheets: Sheet[];
+};
+
+export function AppShell({ initialSheets }: AppShellProps) {
   const [activeTab, setActiveTab] = useState("library");
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedSheet, setSelectedSheet] = useState<MockSheet | null>(null);
-  const [sheets, setSheets] = useState(mockSheets);
+  const [selectedSheet, setSelectedSheet] = useState<Sheet | null>(null);
+  const [sheets, setSheets] = useState(initialSheets);
   const activeLabel =
     tabs.find((tab) => tab.value === activeTab)?.label ?? "Library";
 
@@ -51,11 +55,32 @@ export function AppShell() {
     setSelectedSheet(null);
   }
 
-  function handleAddSheet(draft: Omit<MockSheet, "id" | "status">) {
-    setSheets((current) => {
-      const id = current.reduce((max, sheet) => Math.max(max, sheet.id), 0) + 1;
-      return [{ ...draft, id, status: "Not started" }, ...current];
+  async function handleAddSheet(draft: SheetDraft) {
+    const formData = new FormData();
+    formData.set("title", draft.title);
+    formData.set("composer", draft.composer);
+    formData.set("difficulty", draft.difficulty);
+    formData.set("file", draft.file);
+
+    const response = await fetch("/api/sheets", {
+      method: "POST",
+      body: formData,
     });
+    const result = (await response.json()) as Sheet | { error?: string };
+
+    if (!response.ok) {
+      throw new Error(
+        "error" in result && result.error
+          ? result.error
+          : "The sheet could not be saved.",
+      );
+    }
+
+    setSheets((current) => [result as Sheet, ...current]);
+  }
+
+  function handleOpenInPiano() {
+    setActiveTab("piano");
   }
 
   return (
@@ -145,7 +170,7 @@ export function AppShell() {
                         onClick={() => setSelectedSheet(null)}
                         type="button"
                       >
-                        Library
+                        {activeLabel}
                       </button>
                     </BreadcrumbLink>
                   </BreadcrumbItem>
@@ -174,6 +199,7 @@ export function AppShell() {
               {value === "library" && selectedSheet ? (
                 <SheetDetailView
                   onBack={() => setSelectedSheet(null)}
+                  onOpenInPiano={handleOpenInPiano}
                   sheet={selectedSheet}
                 />
               ) : null}
@@ -186,7 +212,7 @@ export function AppShell() {
                   onOpenLibrary={() => handleTabChange("library")}
                 />
               ) : null}
-              {value === "piano" ? <PianoView /> : null}
+              {value === "piano" ? <PianoView sheet={selectedSheet} /> : null}
             </TabsContent>
           ))}
         </main>
