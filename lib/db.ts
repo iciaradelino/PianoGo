@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS annotations (
   id INTEGER PRIMARY KEY,
   sheet_id INTEGER NOT NULL UNIQUE REFERENCES sheets(id),
   status TEXT NOT NULL,
+  style TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL
 );
 
@@ -49,7 +50,11 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 `;
 
-const globalForDb = globalThis as unknown as { pianogoDb?: Database.Database };
+const globalForDb = globalThis as unknown as {
+  pianogoDb?: Database.Database;
+  // Set once migrate() has run on the cached connection.
+  pianogoMigrated?: boolean;
+};
 
 export function dataDir() {
   return process.env.DATA_DIR
@@ -57,14 +62,36 @@ export function dataDir() {
     : path.join(process.cwd(), "data");
 }
 
+// CREATE TABLE IF NOT EXISTS leaves older tables alone, so add later columns here.
+function migrate(database: Database.Database) {
+  const annotationColumns = database
+    .prepare(`PRAGMA table_info(annotations)`)
+    .all() as { name: string }[];
+  if (!annotationColumns.some((column) => column.name === "style")) {
+    database.exec(
+      `ALTER TABLE annotations ADD COLUMN style TEXT NOT NULL DEFAULT '{}'`,
+    );
+  }
+}
+
 export function getDb() {
-  if (globalForDb.pianogoDb) return globalForDb.pianogoDb;
+  const cached = globalForDb.pianogoDb;
+  if (cached) {
+    // A dev hot reload keeps the connection but brings in new code.
+    if (!globalForDb.pianogoMigrated) {
+      migrate(cached);
+      globalForDb.pianogoMigrated = true;
+    }
+    return cached;
+  }
 
   const dir = dataDir();
   fs.mkdirSync(dir, { recursive: true });
   const database = new Database(path.join(dir, "pianogo.db"));
   database.pragma("foreign_keys = ON");
   database.exec(schema);
+  migrate(database);
   globalForDb.pianogoDb = database;
+  globalForDb.pianogoMigrated = true;
   return database;
 }

@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { AnnotationStyleControls } from "@/components/processing/annotation-style-controls";
 import { MusicXmlScore } from "@/components/processing/musicxml-score";
+import {
+  defaultAnnotationStyle,
+  parseAnnotationStyle,
+  type AnnotationStyle,
+} from "@/lib/processing/annotation-style";
 
 const zoomSteps = [0.75, 1, 1.25, 1.5];
 // Keeps the loading state on screen long enough to read, even for short scores.
@@ -59,6 +65,9 @@ export function SheetDetailView({
   const [annotationState, setAnnotationState] =
     useState<AnnotationState>("checking");
   const [annotationsVisible, setAnnotationsVisible] = useState(true);
+  const [labelStyle, setLabelStyle] = useState(defaultAnnotationStyle);
+  const savedStyleRef = useRef(defaultAnnotationStyle);
+  const styleRequestRef = useRef(0);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(sheet.title);
   const [composer, setComposer] = useState(sheet.composer);
@@ -78,6 +87,7 @@ export function SheetDetailView({
     setError("");
     setAnnotationState("checking");
     setAnnotationsVisible(true);
+    setLabelStyle(defaultAnnotationStyle);
   }
 
   useEffect(() => {
@@ -88,8 +98,14 @@ export function SheetDetailView({
     async function loadAnnotationStatus() {
       try {
         const response = await fetch(`/api/annotations?sheetId=${sheet.id}`);
-        const payload = (await response.json()) as { status?: string };
+        const payload = (await response.json()) as {
+          status?: string;
+          style?: unknown;
+        };
         if (cancelled) return;
+        const style = parseAnnotationStyle(payload.style);
+        savedStyleRef.current = style;
+        setLabelStyle(style);
         setAnnotationState(
           response.ok && payload.status === "ready" ? "ready" : "none",
         );
@@ -129,6 +145,30 @@ export function SheetDetailView({
       if (sheetIdRef.current !== sheetId) return;
       setAnnotationState("none");
       setError("Could not generate annotations.");
+    }
+  }
+
+  async function handleStyleChange(next: AnnotationStyle) {
+    const sheetId = sheet.id;
+    const request = ++styleRequestRef.current;
+    setLabelStyle(next);
+    setAnnotationsVisible(true);
+    setError("");
+    try {
+      const response = await fetch("/api/annotations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetId, style: next }),
+      });
+      if (!response.ok) throw new Error("Could not save the style.");
+      const payload = (await response.json()) as { style?: unknown };
+      savedStyleRef.current = parseAnnotationStyle(payload.style);
+    } catch {
+      // Only the latest change decides what is shown; older replies are stale.
+      if (sheetIdRef.current !== sheetId) return;
+      if (request !== styleRequestRef.current) return;
+      setLabelStyle(savedStyleRef.current);
+      setError("Could not save the annotation style.");
     }
   }
 
@@ -265,6 +305,7 @@ export function SheetDetailView({
                   annotationsVisible={
                     annotationState === "ready" && annotationsVisible
                   }
+                  labelStyle={labelStyle}
                   generating={annotationState === "generating"}
                   fileUrl={fileUrl}
                   title={sheet.title}
@@ -484,6 +525,16 @@ export function SheetDetailView({
               </Button>
             </div>
           </section>
+
+          {annotationState === "ready" && annotationsVisible ? (
+            <section>
+              <h2>Annotation style</h2>
+              <AnnotationStyleControls
+                onChange={(next) => void handleStyleChange(next)}
+                style={labelStyle}
+              />
+            </section>
+          ) : null}
 
           <section>
             <h2>Piano</h2>

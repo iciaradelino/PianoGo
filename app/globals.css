@@ -1130,12 +1130,8 @@ button {
 
 .solfege-label {
   animation: solfege-label-in 250ms ease-out both;
-
-  fill: #2563eb;
   font-family: var(--font-sans, system-ui), sans-serif;
-  font-size: 10px;
   font-weight: 600;
-  dominant-baseline: central;
   paint-order: stroke;
   stroke: #ffffff;
   stroke-width: 2.5px;
@@ -1227,6 +1223,91 @@ button {
   display: grid;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+.annotation-style > .sheet-field:first-child {
+  margin-top: 0.75rem;
+}
+
+.annotation-style-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.segmented-control {
+  display: flex;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  padding: 0.125rem;
+  background: #f4f4f5;
+}
+
+.segmented-control button {
+  flex: 1 1 0;
+  min-width: 2rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  padding: 0 0.5rem;
+  color: #52525b;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.segmented-control button:hover:not(:disabled) {
+  color: #18181b;
+}
+
+.segmented-control button[aria-checked="true"] {
+  background: #ffffff;
+  color: #18181b;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.segmented-control button:focus-visible,
+.color-swatches button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.color-swatches button {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px #d4d4d8;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.color-swatches button[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--swatch);
+}
+
+.color-swatches svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.annotation-style-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  color: #71717a;
+  font-size: 0.75rem;
 }
 
 .annotation-actions [data-slot="button"] {
