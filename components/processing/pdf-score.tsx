@@ -47,6 +47,7 @@ type PdfScoreProps = {
   labelStyle: AnnotationStyle;
   notes: PdfNoteRecord[];
   generating?: boolean;
+  generatingMessage?: string;
 };
 
 async function openPdf(fileUrl: string) {
@@ -275,6 +276,7 @@ export function PdfScore({
   labelStyle,
   notes,
   generating = false,
+  generatingMessage = "Finding note names…",
 }: PdfScoreProps) {
   const [loaded, setLoaded] = useState<LoadState>();
   const current = loaded?.url === fileUrl ? loaded : undefined;
@@ -342,7 +344,7 @@ export function PdfScore({
         <div className="score-generating" role="status">
           <span className="score-generating-badge">
             <LoaderCircle aria-hidden="true" className="animate-spin" />
-            Finding note names…
+            {generatingMessage}
           </span>
         </div>
       ) : null}

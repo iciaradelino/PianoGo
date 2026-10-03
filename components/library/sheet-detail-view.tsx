@@ -45,8 +45,32 @@ const PdfScore = dynamic(
 const zoomSteps = [0.75, 1, 1.25, 1.5];
 // Keeps the loading state on screen long enough to read, even for short scores.
 const minimumGeneratingMs = 900;
+// How often to ask whether a scan has been read.
+const scanPollMs = 3000;
 
-type AnnotationState = "checking" | "none" | "generating" | "ready";
+// "processing" is a scan being read on the server, which takes minutes.
+type AnnotationState =
+  | "checking"
+  | "none"
+  | "generating"
+  | "processing"
+  | "ready"
+  | "failed";
+
+type ScanProgress = { sheet: number; sheets: number };
+
+type AnnotationPayload = {
+  status?: string;
+  style?: unknown;
+  progress?: ScanProgress;
+  error?: string;
+};
+
+function scanMessage(progress: ScanProgress | null) {
+  return progress
+    ? `Reading the scan… page ${progress.sheet} of ${progress.sheets}`
+    : "Reading the scan…";
+}
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -81,6 +105,7 @@ export function SheetDetailView({
   const [annotationsVisible, setAnnotationsVisible] = useState(true);
   const [labelStyle, setLabelStyle] = useState(defaultAnnotationStyle);
   const [pdfNotes, setPdfNotes] = useState<PdfNoteRecord[]>([]);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
   const savedStyleRef = useRef(defaultAnnotationStyle);
   const styleRequestRef = useRef(0);
   const [renaming, setRenaming] = useState(false);
@@ -104,6 +129,7 @@ export function SheetDetailView({
     setAnnotationsVisible(true);
     setLabelStyle(defaultAnnotationStyle);
     setPdfNotes([]);
+    setScanProgress(null);
   }
 
   useEffect(() => {
@@ -113,20 +139,24 @@ export function SheetDetailView({
     async function loadAnnotationStatus() {
       try {
         const response = await fetch(`/api/annotations?sheetId=${sheet.id}`);
-        const payload = (await response.json()) as {
-          status?: string;
-          style?: unknown;
-        };
+        const payload = (await response.json()) as AnnotationPayload;
         if (cancelled) return;
         const style = parseAnnotationStyle(payload.style);
-        const ready = response.ok && payload.status === "ready";
+        const status = response.ok ? payload.status : undefined;
         const notes =
-          ready && sheet.fileType === "pdf" ? await fetchPdfNotes(sheet.id) : [];
+          status === "ready" && sheet.fileType === "pdf"
+            ? await fetchPdfNotes(sheet.id)
+            : [];
         if (cancelled) return;
         savedStyleRef.current = style;
         setLabelStyle(style);
         setPdfNotes(notes);
-        setAnnotationState(ready ? "ready" : "none");
+        setScanProgress(payload.progress ?? null);
+        setAnnotationState(
+          status === "ready" || status === "processing" || status === "failed"
+            ? status
+            : "none",
+        );
       } catch {
         if (!cancelled) setAnnotationState("none");
       }
@@ -137,6 +167,41 @@ export function SheetDetailView({
       cancelled = true;
     };
   }, [sheet.id, sheet.fileType]);
+
+  // Asks every few seconds whether the scan being read is done.
+  useEffect(() => {
+    if (annotationState !== "processing") return;
+    const sheetId = sheet.id;
+    let cancelled = false;
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/annotations?sheetId=${sheetId}`);
+        const payload = (await response.json()) as AnnotationPayload;
+        if (cancelled || !response.ok) return;
+        if (payload.status === "processing") {
+          setScanProgress(payload.progress ?? null);
+        } else if (payload.status === "ready") {
+          const notes = await fetchPdfNotes(sheetId);
+          if (cancelled) return;
+          setPdfNotes(notes);
+          setScanProgress(null);
+          setAnnotationsVisible(true);
+          setAnnotationState("ready");
+        } else {
+          setScanProgress(null);
+          setAnnotationState("failed");
+        }
+      } catch {
+        // A missed poll is retried on the next tick.
+      }
+    }, scanPollMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [annotationState, sheet.id]);
 
   async function handleGenerateAnnotations() {
     const sheetId = sheet.id;
@@ -152,13 +217,18 @@ export function SheetDetailView({
         delay(minimumGeneratingMs),
       ]);
       if (sheetIdRef.current !== sheetId) return;
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as AnnotationPayload;
+      if (sheetIdRef.current !== sheetId) return;
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        if (sheetIdRef.current !== sheetId) return;
         setAnnotationState("none");
         setError(payload.error ?? "Could not generate annotations.");
+        return;
+      }
+      if (payload.status === "processing") {
+        setScanProgress(payload.progress ?? null);
+        setAnnotationState("processing");
         return;
       }
       if (sheet.fileType === "pdf") {
@@ -322,7 +392,15 @@ export function SheetDetailView({
                     annotationState === "ready" && annotationsVisible
                   }
                   fileUrl={fileUrl}
-                  generating={annotationState === "generating"}
+                  generating={
+                    annotationState === "generating" ||
+                    annotationState === "processing"
+                  }
+                  generatingMessage={
+                    annotationState === "processing"
+                      ? scanMessage(scanProgress)
+                      : undefined
+                  }
                   labelStyle={labelStyle}
                   notes={pdfNotes}
                   title={sheet.title}
@@ -521,8 +599,13 @@ export function SheetDetailView({
             </div>
             <div className="annotation-actions">
               <Button
-                aria-busy={annotationState === "generating"}
-                disabled={annotationState !== "none"}
+                aria-busy={
+                  annotationState === "generating" ||
+                  annotationState === "processing"
+                }
+                disabled={
+                  annotationState !== "none" && annotationState !== "failed"
+                }
                 onClick={() => void handleGenerateAnnotations()}
                 type="button"
                 variant="outline"
@@ -531,6 +614,16 @@ export function SheetDetailView({
                   <>
                     <LoaderCircle aria-hidden="true" className="animate-spin" />
                     Generating annotations…
+                  </>
+                ) : annotationState === "processing" ? (
+                  <>
+                    <LoaderCircle aria-hidden="true" className="animate-spin" />
+                    Reading the scan…
+                  </>
+                ) : annotationState === "failed" ? (
+                  <>
+                    <Sparkles aria-hidden="true" />
+                    Try again
                   </>
                 ) : annotationState === "ready" ? (
                   <>
@@ -549,6 +642,18 @@ export function SheetDetailView({
                 Add manually
               </Button>
             </div>
+            {annotationState === "processing" ? (
+              <p className="annotation-note">
+                Scanned sheets are read with optical music recognition, which
+                takes about half a minute per page. You can leave this page.
+              </p>
+            ) : null}
+            {annotationState === "failed" ? (
+              <p className="annotation-note annotation-note-error">
+                The music in this scan could not be recognised. Clear, straight
+                scans of printed music work best.
+              </p>
+            ) : null}
           </section>
 
           {annotationState === "ready" && annotationsVisible ? (
