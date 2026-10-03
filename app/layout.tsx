@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import type { ReactNode } from "react";
+import { SettingsProvider } from "@/components/settings/settings-provider";
+import { themeScript } from "@/lib/settings/preferences";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -23,8 +25,19 @@ type RootLayoutProps = Readonly<{
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html className={cn("font-sans", geist.variable)} lang="en">
-      <body>{children}</body>
+    // The theme script adds the dark class before hydration, so React must not
+    // treat the html class or lang as a mismatch.
+    <html
+      className={cn("font-sans", geist.variable)}
+      lang="en"
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body>
+        <SettingsProvider>{children}</SettingsProvider>
+      </body>
     </html>
   );
 }

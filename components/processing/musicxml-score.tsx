@@ -16,6 +16,7 @@ import {
   type LabelSize,
 } from "@/lib/processing/annotation-style";
 import { noteName } from "@/lib/processing/solfege";
+import { useSettings } from "@/components/settings/settings-provider";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const LABEL_LAYER_CLASS = "solfege-labels";
@@ -247,6 +248,7 @@ export function MusicXmlScore({
   labelStyle,
   generating = false,
 }: MusicXmlScoreProps) {
+  const { t } = useSettings();
   const containerRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const baseRulesRef = useRef<BaseRules>({
@@ -323,11 +325,11 @@ export function MusicXmlScore({
   return (
     <div className="score-file score-musicxml">
       {loadState === "loading" ? (
-        <p className="score-musicxml-status">Loading score…</p>
+        <p className="score-musicxml-status">{t("score.loading")}</p>
       ) : null}
       {loadState === "error" ? (
         <p className="score-musicxml-status">
-          This MusicXML file could not be displayed.
+          {t("score.musicXmlFailed")}
         </p>
       ) : null}
       <div aria-label={title} ref={containerRef} role="img" />
@@ -335,7 +337,7 @@ export function MusicXmlScore({
         <div className="score-generating" role="status">
           <span className="score-generating-badge">
             <LoaderCircle aria-hidden="true" className="animate-spin" />
-            Finding note names…
+            {t("score.findingNotes")}
           </span>
         </div>
       ) : null}

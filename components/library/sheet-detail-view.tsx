@@ -16,7 +16,13 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import type { Difficulty, PracticeStatus, Sheet } from "@/lib/library/model";
+import {
+  difficulties,
+  practiceStatuses,
+  type Difficulty,
+  type PracticeStatus,
+  type Sheet,
+} from "@/lib/library/model";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +35,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AnnotationStyleControls } from "@/components/processing/annotation-style-controls";
 import { MusicXmlScore } from "@/components/processing/musicxml-score";
+import { useSettings } from "@/components/settings/settings-provider";
 import {
   defaultAnnotationStyle,
   parseAnnotationStyle,
@@ -66,10 +73,16 @@ type AnnotationPayload = {
   error?: string;
 };
 
-function scanMessage(progress: ScanProgress | null) {
+function scanMessage(
+  t: ReturnType<typeof useSettings>["t"],
+  progress: ScanProgress | null,
+) {
   return progress
-    ? `Reading the scan… page ${progress.sheet} of ${progress.sheets}`
-    : "Reading the scan…";
+    ? t("sheet.readingScanPage", {
+        page: progress.sheet,
+        pages: progress.sheets,
+      })
+    : t("sheet.readingScan");
 }
 
 function delay(ms: number) {
@@ -98,6 +111,7 @@ export function SheetDetailView({
   onUpdate,
   onDelete,
 }: SheetDetailViewProps) {
+  const { t } = useSettings();
   const sheetIdRef = useRef(sheet.id);
   const [seenId, setSeenId] = useState(sheet.id);
   const [annotationState, setAnnotationState] =
@@ -223,7 +237,7 @@ export function SheetDetailView({
       if (sheetIdRef.current !== sheetId) return;
       if (!response.ok) {
         setAnnotationState("none");
-        setError(payload.error ?? "Could not generate annotations.");
+        setError(payload.error ?? t("sheet.generateFailed"));
         return;
       }
       if (payload.status === "processing") {
@@ -241,7 +255,7 @@ export function SheetDetailView({
     } catch {
       if (sheetIdRef.current !== sheetId) return;
       setAnnotationState("none");
-      setError("Could not generate annotations.");
+      setError(t("sheet.generateFailed"));
     }
   }
 
@@ -265,7 +279,7 @@ export function SheetDetailView({
       if (sheetIdRef.current !== sheetId) return;
       if (request !== styleRequestRef.current) return;
       setLabelStyle(savedStyleRef.current);
-      setError("Could not save the annotation style.");
+      setError(t("sheet.styleFailed"));
     }
   }
 
@@ -285,7 +299,7 @@ export function SheetDetailView({
       });
       const payload = (await response.json()) as Sheet & { error?: string };
       if (!response.ok) {
-        setError(payload.error ?? "Could not save this sheet.");
+        setError(payload.error ?? t("sheet.saveFailed"));
         return false;
       }
       onUpdate(payload);
@@ -294,7 +308,7 @@ export function SheetDetailView({
       setComposer(payload.composer);
       return true;
     } catch {
-      setError("Could not save this sheet.");
+      setError(t("sheet.saveFailed"));
       return false;
     } finally {
       setSaving(false);
@@ -328,12 +342,12 @@ export function SheetDetailView({
         method: "DELETE",
       });
       if (!response.ok) {
-        setError("Could not remove this sheet.");
+        setError(t("sheet.removeFailed"));
         return;
       }
       onDelete(sheet.id);
     } catch {
-      setError("Could not remove this sheet.");
+      setError(t("sheet.removeFailed"));
     } finally {
       setSaving(false);
     }
@@ -356,7 +370,7 @@ export function SheetDetailView({
             </span>
             <div className="zoom-controls">
               <Button
-                aria-label="Zoom out"
+                aria-label={t("sheet.zoomOut")}
                 disabled={zoom === zoomSteps[0]}
                 onClick={() => changeZoom(-1)}
                 size="icon-sm"
@@ -367,7 +381,7 @@ export function SheetDetailView({
               </Button>
               <span>{Math.round(zoom * 100)}%</span>
               <Button
-                aria-label="Zoom in"
+                aria-label={t("sheet.zoomIn")}
                 disabled={zoom === zoomSteps[zoomSteps.length - 1]}
                 onClick={() => changeZoom(1)}
                 size="icon-sm"
@@ -398,7 +412,7 @@ export function SheetDetailView({
                   }
                   generatingMessage={
                     annotationState === "processing"
-                      ? scanMessage(scanProgress)
+                      ? scanMessage(t, scanProgress)
                       : undefined
                   }
                   labelStyle={labelStyle}
@@ -425,7 +439,7 @@ export function SheetDetailView({
           <section className="sheet-summary">
             <div className="sheet-title-group">
               <Button
-                aria-label="Back to library"
+                aria-label={t("sheet.back")}
                 onClick={onBack}
                 size="icon"
                 type="button"
@@ -436,14 +450,14 @@ export function SheetDetailView({
               {renaming ? (
                 <div className="sheet-rename">
                   <Input
-                    aria-label="Title"
+                    aria-label={t("sheet.title")}
                     onChange={(event) => setTitle(event.target.value)}
                     value={title}
                   />
                   <Input
-                    aria-label="Composer"
+                    aria-label={t("sheet.composer")}
                     onChange={(event) => setComposer(event.target.value)}
-                    placeholder="Composer"
+                    placeholder={t("sheet.composer")}
                     value={composer}
                   />
                 </div>
@@ -464,7 +478,7 @@ export function SheetDetailView({
                     size="sm"
                     type="button"
                   >
-                    Save
+                    {t("sheet.save")}
                   </Button>
                   <Button
                     onClick={() => {
@@ -477,7 +491,7 @@ export function SheetDetailView({
                     type="button"
                     variant="outline"
                   >
-                    Cancel
+                    {t("sheet.cancel")}
                   </Button>
                 </>
               ) : (
@@ -488,16 +502,16 @@ export function SheetDetailView({
                   variant="outline"
                 >
                   <Pencil aria-hidden="true" />
-                  Rename
+                  {t("sheet.rename")}
                 </Button>
               )}
-              <Button asChild aria-label="Download sheet" size="icon" variant="outline">
+              <Button asChild aria-label={t("sheet.download")} size="icon" variant="outline">
                 <a download href={fileUrl}>
                   <Download aria-hidden="true" />
                 </a>
               </Button>
               <Button
-                aria-label="Print sheet"
+                aria-label={t("sheet.print")}
                 onClick={handlePrint}
                 size="icon"
                 type="button"
@@ -506,7 +520,7 @@ export function SheetDetailView({
                 <Printer aria-hidden="true" />
               </Button>
               <Button
-                aria-label="Remove sheet"
+                aria-label={t("sheet.remove")}
                 onClick={() => setConfirmRemove(true)}
                 size="icon"
                 type="button"
@@ -518,7 +532,7 @@ export function SheetDetailView({
 
             {confirmRemove ? (
               <div className="sheet-confirm">
-                <span>Remove this sheet?</span>
+                <span>{t("sheet.confirmRemove")}</span>
                 <Button
                   disabled={saving}
                   onClick={() => void handleDelete()}
@@ -526,7 +540,7 @@ export function SheetDetailView({
                   type="button"
                   variant="destructive"
                 >
-                  Remove
+                  {t("sheet.removeAction")}
                 </Button>
                 <Button
                   onClick={() => setConfirmRemove(false)}
@@ -534,7 +548,7 @@ export function SheetDetailView({
                   type="button"
                   variant="ghost"
                 >
-                  Cancel
+                  {t("sheet.cancel")}
                 </Button>
               </div>
             ) : null}
@@ -542,9 +556,9 @@ export function SheetDetailView({
           </section>
 
           <section>
-            <h2>Properties</h2>
+            <h2>{t("sheet.properties")}</h2>
             <div className="sheet-field">
-              <span>Difficulty</span>
+              <span>{t("sheet.difficulty")}</span>
               <Select
                 disabled={saving}
                 onValueChange={(value) =>
@@ -552,19 +566,21 @@ export function SheetDetailView({
                 }
                 value={sheet.difficulty}
               >
-                <SelectTrigger aria-label="Difficulty">
+                <SelectTrigger aria-label={t("sheet.difficulty")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Beginner">Beginner</SelectItem>
-                  <SelectItem value="Intermediate">Intermediate</SelectItem>
-                  <SelectItem value="Advanced">Advanced</SelectItem>
+                  {difficulties.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t(`difficulty.${option}`)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="sheet-field">
-              <span>Practice status</span>
+              <span>{t("sheet.practiceStatus")}</span>
               <Select
                 disabled={saving}
                 onValueChange={(value) =>
@@ -572,13 +588,15 @@ export function SheetDetailView({
                 }
                 value={sheet.status}
               >
-                <SelectTrigger aria-label="Practice status">
+                <SelectTrigger aria-label={t("sheet.practiceStatus")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Not started">Not started</SelectItem>
-                  <SelectItem value="In progress">In progress</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
+                  {practiceStatuses.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {t(`status.${option}`)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -586,11 +604,11 @@ export function SheetDetailView({
 
           <section>
             <div className="inspector-section-heading">
-              <h2>Annotations</h2>
+              <h2>{t("sheet.annotations")}</h2>
               <div className="annotation-switch">
-                <span>Show</span>
+                <span>{t("sheet.show")}</span>
                 <Switch
-                  aria-label="Show annotations"
+                  aria-label={t("sheet.showAnnotations")}
                   checked={annotationState === "ready" && annotationsVisible}
                   disabled={annotationState !== "ready"}
                   onCheckedChange={setAnnotationsVisible}
@@ -613,52 +631,50 @@ export function SheetDetailView({
                 {annotationState === "generating" ? (
                   <>
                     <LoaderCircle aria-hidden="true" className="animate-spin" />
-                    Generating annotations…
+                    {t("sheet.generating")}
                   </>
                 ) : annotationState === "processing" ? (
                   <>
                     <LoaderCircle aria-hidden="true" className="animate-spin" />
-                    Reading the scan…
+                    {t("sheet.readingScan")}
                   </>
                 ) : annotationState === "failed" ? (
                   <>
                     <Sparkles aria-hidden="true" />
-                    Try again
+                    {t("sheet.tryAgain")}
                   </>
                 ) : annotationState === "ready" ? (
                   <>
                     <Check aria-hidden="true" />
-                    Annotations generated
+                    {t("sheet.generated")}
                   </>
                 ) : (
                   <>
                     <Sparkles aria-hidden="true" />
-                    Generate annotations
+                    {t("sheet.generate")}
                   </>
                 )}
               </Button>
               <Button type="button" variant="outline">
                 <MousePointerClick aria-hidden="true" />
-                Add manually
+                {t("sheet.addManually")}
               </Button>
             </div>
             {annotationState === "processing" ? (
               <p className="annotation-note">
-                Scanned sheets are read with optical music recognition, which
-                takes about half a minute per page. You can leave this page.
+                {t("sheet.scanNote")}
               </p>
             ) : null}
             {annotationState === "failed" ? (
               <p className="annotation-note annotation-note-error">
-                The music in this scan could not be recognised. Clear, straight
-                scans of printed music work best.
+                {t("sheet.scanFailed")}
               </p>
             ) : null}
           </section>
 
           {annotationState === "ready" && annotationsVisible ? (
             <section>
-              <h2>Annotation style</h2>
+              <h2>{t("sheet.annotationStyle")}</h2>
               <AnnotationStyleControls
                 onChange={(next) => void handleStyleChange(next)}
                 style={labelStyle}
@@ -667,11 +683,11 @@ export function SheetDetailView({
           ) : null}
 
           <section>
-            <h2>Piano</h2>
+            <h2>{t("sheet.piano")}</h2>
             <div className="annotation-actions">
               <Button onClick={onOpenInPiano} type="button" variant="outline">
                 <Piano aria-hidden="true" />
-                Open in Piano
+                {t("sheet.openInPiano")}
               </Button>
             </div>
           </section>

@@ -2,10 +2,12 @@
 
 import { FileMusic, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type {
-  Difficulty,
-  PracticeStatus,
-  Sheet,
+import {
+  difficulties,
+  practiceStatuses,
+  type Difficulty,
+  type PracticeStatus,
+  type Sheet,
 } from "@/lib/library/model";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { musicXmlPreview } from "@/components/processing/musicxml-preview";
+import { useSettings } from "@/components/settings/settings-provider";
 
 function useMusicXmlPreview(sheet: Sheet) {
   const fileUrl = `/api/sheets/${sheet.id}/file`;
@@ -77,6 +80,7 @@ export function LibraryView({
   loadError = "",
   onSelectSheet,
 }: LibraryViewProps) {
+  const { t } = useSettings();
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState<"all" | Difficulty>("all");
   const [status, setStatus] = useState<"all" | PracticeStatus>("all");
@@ -103,9 +107,9 @@ export function LibraryView({
         <div className="library-search">
           <Search aria-hidden="true" size={16} />
           <Input
-            aria-label="Search sheets"
+            aria-label={t("library.search")}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search title or composer"
+            placeholder={t("library.searchPlaceholder")}
             type="search"
             value={query}
           />
@@ -117,14 +121,16 @@ export function LibraryView({
           }
           value={difficulty}
         >
-          <SelectTrigger aria-label="Filter by difficulty">
-            <SelectValue placeholder="Difficulty" />
+          <SelectTrigger aria-label={t("library.filterDifficulty")}>
+            <SelectValue placeholder={t("library.difficulty")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All difficulties</SelectItem>
-            <SelectItem value="Beginner">Beginner</SelectItem>
-            <SelectItem value="Intermediate">Intermediate</SelectItem>
-            <SelectItem value="Advanced">Advanced</SelectItem>
+            <SelectItem value="all">{t("library.allDifficulties")}</SelectItem>
+            {difficulties.map((option) => (
+              <SelectItem key={option} value={option}>
+                {t(`difficulty.${option}`)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -132,20 +138,24 @@ export function LibraryView({
           onValueChange={(value) => setStatus(value as "all" | PracticeStatus)}
           value={status}
         >
-          <SelectTrigger aria-label="Filter by practice status">
-            <SelectValue placeholder="Status" />
+          <SelectTrigger aria-label={t("library.filterStatus")}>
+            <SelectValue placeholder={t("library.status")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="Not started">Not started</SelectItem>
-            <SelectItem value="In progress">In progress</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="all">{t("library.allStatuses")}</SelectItem>
+            {practiceStatuses.map((option) => (
+              <SelectItem key={option} value={option}>
+                {t(`status.${option}`)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
       <p className="library-count">
-        {sheets.length} {sheets.length === 1 ? "sheet" : "sheets"}
+        {t(sheets.length === 1 ? "library.countOne" : "library.countOther", {
+          count: sheets.length,
+        })}
       </p>
 
       {loadError ? (
@@ -157,7 +167,7 @@ export function LibraryView({
         <div className="sheet-grid">
           {sheets.map((sheet) => (
             <button
-              aria-label={`Open ${sheet.title}`}
+              aria-label={t("library.open", { title: sheet.title })}
               className="sheet-card-button"
               key={sheet.id}
               onClick={() => onSelectSheet(sheet)}
@@ -170,8 +180,12 @@ export function LibraryView({
                   <CardDescription>{sheet.composer}</CardDescription>
                 </CardHeader>
                 <CardFooter className="sheet-card-footer">
-                  <Badge variant="outline">{sheet.difficulty}</Badge>
-                  <Badge variant="secondary">{sheet.status}</Badge>
+                  <Badge variant="outline">
+                    {t(`difficulty.${sheet.difficulty}`)}
+                  </Badge>
+                  <Badge variant="secondary">
+                    {t(`status.${sheet.status}`)}
+                  </Badge>
                 </CardFooter>
               </Card>
             </button>
@@ -182,8 +196,8 @@ export function LibraryView({
           <FileMusic aria-hidden="true" size={24} strokeWidth={1.4} />
           <p>
             {allSheets.length === 0
-              ? "No sheets yet."
-              : "No sheets match these filters."}
+              ? t("library.empty")
+              : t("library.noMatch")}
           </p>
         </div>
       )}

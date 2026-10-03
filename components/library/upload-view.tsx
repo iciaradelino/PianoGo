@@ -4,6 +4,7 @@ import { FileMusic, Upload, X } from "lucide-react";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
   acceptedExtensions,
+  difficulties,
   fileKind,
   type Difficulty,
   type FileType,
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSettings } from "@/components/settings/settings-provider";
 
 type UploadViewProps = {
   onUploaded: () => void;
@@ -39,6 +41,7 @@ function formatFileSize(bytes: number) {
 }
 
 export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
+  const { t } = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [file, setFile] = useState<File | null>(null);
@@ -54,7 +57,7 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
   function acceptFile(next: File) {
     const nextKind = fileKind(next.name);
     if (!nextKind) {
-      setError("Use a PDF or MusicXML file.");
+      setError(t("upload.wrongType"));
       return;
     }
 
@@ -103,13 +106,13 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
     event.preventDefault();
     if (saving) return;
     if (!file || !kind) {
-      setError("Choose a PDF or MusicXML file.");
+      setError(t("upload.chooseFile"));
       return;
     }
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setError("Add a title.");
+      setError(t("upload.addTitle"));
       return;
     }
 
@@ -127,7 +130,7 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
       const response = await fetch("/api/sheets", { method: "POST", body });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        setError(payload.error ?? "Could not add this sheet.");
+        setError(payload.error ?? t("upload.failed"));
         return;
       }
 
@@ -136,9 +139,9 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
       setTitle("");
       setComposer("");
       setDifficulty("Beginner");
-      setNotice(`${trimmedTitle} added to your library.`);
+      setNotice(t("upload.added", { title: trimmedTitle }));
     } catch {
-      setError("Could not add this sheet.");
+      setError(t("upload.failed"));
     } finally {
       setSaving(false);
     }
@@ -157,7 +160,7 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
               </span>
             </div>
             <Button
-              aria-label="Remove file"
+              aria-label={t("upload.removeFile")}
               disabled={saving}
               onClick={clearFile}
               size="icon"
@@ -177,11 +180,11 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
             onDrop={handleDrop}
           >
             <Upload aria-hidden="true" size={22} strokeWidth={1.6} />
-            <p>Drop a sheet here, or browse</p>
-            <span>PDF or MusicXML</span>
+            <p>{t("upload.drop")}</p>
+            <span>{t("upload.formats")}</span>
             <input
               accept={acceptedExtensions.join(",")}
-              aria-label="Choose a sheet file"
+              aria-label={t("upload.chooseFileLabel")}
               className="upload-file-input"
               onChange={(event) => {
                 const next = event.target.files?.[0];
@@ -194,7 +197,7 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
         )}
 
         <label className="sheet-field">
-          <span>Title</span>
+          <span>{t("upload.title")}</span>
           <Input
             onChange={(event) => setTitle(event.target.value)}
             value={title}
@@ -202,27 +205,29 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
         </label>
 
         <label className="sheet-field">
-          <span>Composer</span>
+          <span>{t("upload.composer")}</span>
           <Input
             onChange={(event) => setComposer(event.target.value)}
-            placeholder="Optional"
+            placeholder={t("upload.optional")}
             value={composer}
           />
         </label>
 
         <label className="sheet-field">
-          <span>Difficulty</span>
+          <span>{t("upload.difficulty")}</span>
           <Select
             onValueChange={(value) => setDifficulty(value as Difficulty)}
             value={difficulty}
           >
-            <SelectTrigger aria-label="Difficulty">
+            <SelectTrigger aria-label={t("upload.difficulty")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Beginner">Beginner</SelectItem>
-              <SelectItem value="Intermediate">Intermediate</SelectItem>
-              <SelectItem value="Advanced">Advanced</SelectItem>
+              {difficulties.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {t(`difficulty.${option}`)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </label>
@@ -232,13 +237,13 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
           <p className="upload-notice">
             {notice}{" "}
             <button onClick={onOpenLibrary} type="button">
-              View in library
+              {t("upload.viewInLibrary")}
             </button>
           </p>
         ) : null}
 
         <Button disabled={saving} type="submit">
-          {saving ? "Adding…" : "Add to library"}
+          {saving ? t("upload.adding") : t("upload.add")}
         </Button>
       </form>
     </section>

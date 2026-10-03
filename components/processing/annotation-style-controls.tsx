@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   labelColors,
   labelColorValues,
+  labelSizes,
   type AnnotationStyle,
   type LabelColor,
   type LabelPosition,
@@ -21,6 +22,8 @@ import {
   type NamingSystem,
 } from "@/lib/processing/annotation-style";
 import { noteName } from "@/lib/processing/solfege";
+import type { MessageKey } from "@/lib/settings/messages";
+import { useSettings } from "@/components/settings/settings-provider";
 
 type AnnotationStyleControlsProps = {
   style: AnnotationStyle;
@@ -34,19 +37,19 @@ type Option<T extends string> = {
   ariaLabel: string;
 };
 
-const sizeOptions: Option<LabelSize>[] = [
-  { value: "small", label: "S", ariaLabel: "Small" },
-  { value: "medium", label: "M", ariaLabel: "Medium" },
-  { value: "large", label: "L", ariaLabel: "Large" },
-];
+const sizeKeys: Record<LabelSize, [MessageKey, MessageKey]> = {
+  small: ["style.smallShort", "style.small"],
+  medium: ["style.mediumShort", "style.medium"],
+  large: ["style.largeShort", "style.large"],
+};
 
-const colorNames: Record<LabelColor, string> = {
-  blue: "Blue",
-  red: "Red",
-  green: "Green",
-  purple: "Purple",
-  orange: "Orange",
-  black: "Black",
+const colorNames: Record<LabelColor, MessageKey> = {
+  blue: "style.blue",
+  red: "style.red",
+  green: "style.green",
+  purple: "style.purple",
+  orange: "style.orange",
+  black: "style.black",
 };
 
 function SegmentedControl<T extends string>({
@@ -86,7 +89,13 @@ export function AnnotationStyleControls({
   disabled,
   onChange,
 }: AnnotationStyleControlsProps) {
+  const { t } = useSettings();
   const octaveId = useId();
+  const sizeOptions = labelSizes.map((value) => ({
+    value,
+    label: t(sizeKeys[value][0]),
+    ariaLabel: t(sizeKeys[value][1]),
+  }));
 
   function update(changes: Partial<AnnotationStyle>) {
     onChange({ ...style, ...changes });
@@ -101,17 +110,33 @@ export function AnnotationStyleControls({
   const singleLetters = style.naming === "letters";
   const caseOptions: Option<LetterCase>[] = singleLetters
     ? [
-        { value: "lower", label: caseSample("lower"), ariaLabel: "Lowercase" },
-        { value: "upper", label: caseSample("upper"), ariaLabel: "Uppercase" },
+        {
+          value: "lower",
+          label: caseSample("lower"),
+          ariaLabel: t("style.lowercase"),
+        },
+        {
+          value: "upper",
+          label: caseSample("upper"),
+          ariaLabel: t("style.uppercase"),
+        },
       ]
     : [
-        { value: "lower", label: caseSample("lower"), ariaLabel: "Lowercase" },
+        {
+          value: "lower",
+          label: caseSample("lower"),
+          ariaLabel: t("style.lowercase"),
+        },
         {
           value: "capitalized",
           label: caseSample("capitalized"),
-          ariaLabel: "Capitalized",
+          ariaLabel: t("style.capitalized"),
         },
-        { value: "upper", label: caseSample("upper"), ariaLabel: "Uppercase" },
+        {
+          value: "upper",
+          label: caseSample("upper"),
+          ariaLabel: t("style.uppercase"),
+        },
       ];
   const caseValue =
     singleLetters && style.letterCase === "capitalized"
@@ -121,13 +146,13 @@ export function AnnotationStyleControls({
   return (
     <div className="annotation-style">
       <div className="sheet-field">
-        <span>Note names</span>
+        <span>{t("style.noteNames")}</span>
         <Select
           disabled={disabled}
           onValueChange={(value) => update({ naming: value as NamingSystem })}
           value={style.naming}
         >
-          <SelectTrigger aria-label="Note names">
+          <SelectTrigger aria-label={t("style.noteNames")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -138,7 +163,7 @@ export function AnnotationStyleControls({
       </div>
 
       <div className="sheet-field">
-        <span>Position</span>
+        <span>{t("style.position")}</span>
         <Select
           disabled={disabled}
           onValueChange={(value) =>
@@ -146,32 +171,32 @@ export function AnnotationStyleControls({
           }
           value={style.position}
         >
-          <SelectTrigger aria-label="Label position">
+          <SelectTrigger aria-label={t("style.labelPosition")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="beside">Beside each note</SelectItem>
-            <SelectItem value="below">Below the staff</SelectItem>
+            <SelectItem value="beside">{t("style.beside")}</SelectItem>
+            <SelectItem value="below">{t("style.below")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div className="annotation-style-row">
         <div className="sheet-field">
-          <span>Size</span>
+          <span>{t("style.size")}</span>
           <SegmentedControl
             disabled={disabled}
-            label="Label size"
+            label={t("style.labelSize")}
             onChange={(size) => update({ size })}
             options={sizeOptions}
             value={style.size}
           />
         </div>
         <div className="sheet-field">
-          <span>Letter case</span>
+          <span>{t("style.letterCase")}</span>
           <SegmentedControl
             disabled={disabled}
-            label="Letter case"
+            label={t("style.letterCase")}
             onChange={(letterCase) => update({ letterCase })}
             options={caseOptions}
             value={caseValue}
@@ -180,18 +205,18 @@ export function AnnotationStyleControls({
       </div>
 
       <div className="sheet-field">
-        <span>Color</span>
-        <div aria-label="Label color" className="color-swatches" role="radiogroup">
+        <span>{t("style.color")}</span>
+        <div aria-label={t("style.labelColor")} className="color-swatches" role="radiogroup">
           {labelColors.map((color) => (
             <button
               aria-checked={style.color === color}
-              aria-label={colorNames[color]}
+              aria-label={t(colorNames[color])}
               disabled={disabled}
               key={color}
               onClick={() => update({ color })}
               role="radio"
               style={{ "--swatch": labelColorValues[color] } as React.CSSProperties}
-              title={colorNames[color]}
+              title={t(colorNames[color])}
               type="button"
             >
               {style.color === color ? <Check aria-hidden="true" /> : null}
@@ -201,7 +226,7 @@ export function AnnotationStyleControls({
       </div>
 
       <div className="annotation-style-toggle">
-        <label htmlFor={octaveId}>Octave numbers</label>
+        <label htmlFor={octaveId}>{t("style.octaveNumbers")}</label>
         <Switch
           checked={style.showOctave}
           disabled={disabled}

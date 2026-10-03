@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, FileMusic } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SheetScoreViewer } from "@/components/library/sheet-score-viewer";
 import { Button } from "@/components/ui/button";
+import { useSettings } from "@/components/settings/settings-provider";
 import type { Sheet } from "@/lib/library/model";
 import { playPianoNote } from "./play-note";
 
@@ -91,6 +92,7 @@ type PianoViewProps = {
 };
 
 export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
+  const { t } = useSettings();
   const visibleCount = useVisibleWhiteKeys(Boolean(sheet));
   const [selectedMidi, setSelectedMidi] = useState(60);
   const [windowStart, setWindowStart] = useState(() =>
@@ -169,7 +171,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
       className={sheet ? "piano-view piano-view-with-sheet" : "piano-view"}
     >
       {sheet ? (
-        <aside className="piano-sheet" aria-label={`${sheet.title} sheet music`}>
+        <aside className="piano-sheet" aria-label={t("piano.sheetMusic", { title: sheet.title })}>
           <div className="piano-sheet-canvas">
             <SheetScoreViewer sheet={sheet} />
           </div>
@@ -184,10 +186,10 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
             variant="outline"
           >
             <FileMusic aria-hidden="true" />
-            Open sheet
+            {t("piano.openSheet")}
           </Button>
           <div className="selected-note-readout">
-            <span>Selected note</span>
+            <span>{t("piano.selectedNote")}</span>
             <strong aria-live="polite">{selectedKey.label}</strong>
           </div>
         </div>
@@ -209,7 +211,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
                 </button>
               ))
             ) : (
-              <p>No sheets in the library yet.</p>
+              <p>{t("piano.noSheets")}</p>
             )}
           </div>
         ) : null}
@@ -217,7 +219,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
         <div className="keyboard-frame">
           <div className="keyboard-row">
             <Button
-              aria-label="Octave down"
+              aria-label={t("piano.octaveDown")}
               disabled={visibleStart === 0}
               onClick={() => moveOctave(-1)}
               size="icon"
@@ -228,7 +230,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
 
             <div className="keyboard-scroll">
               <div
-                aria-label="Piano keyboard"
+                aria-label={t("piano.keyboard")}
                 className="piano-keyboard"
                 data-dragging={dragging}
                 onPointerDown={handlePointerDown}
@@ -246,7 +248,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
 
                     return (
                       <button
-                        aria-label={`Select ${key.label}`}
+                        aria-label={t("piano.selectKey", { note: key.label })}
                         aria-pressed={isSelected}
                         className="piano-key piano-key-white"
                         data-selected={isSelected}
@@ -267,7 +269,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
 
                   return (
                     <button
-                      aria-label={`Select ${key.label}`}
+                      aria-label={t("piano.selectKey", { note: key.label })}
                       aria-pressed={isSelected}
                       className="piano-key piano-key-black"
                       data-selected={isSelected}
@@ -286,7 +288,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
             </div>
 
             <Button
-              aria-label="Octave up"
+              aria-label={t("piano.octaveUp")}
               disabled={visibleStart >= maxStart}
               onClick={() => moveOctave(1)}
               size="icon"
@@ -299,7 +301,7 @@ export function PianoView({ sheet, sheets, onOpenSheet }: PianoViewProps) {
 
         <div className="keyboard-overview">
           <div className="overview-heading">
-            <span>Full keyboard</span>
+            <span>{t("piano.fullKeyboard")}</span>
             <span>
               {PIANO_KEYS[0].label}–{PIANO_KEYS[PIANO_KEYS.length - 1].label}
             </span>

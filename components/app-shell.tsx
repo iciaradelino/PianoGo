@@ -5,6 +5,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Piano,
+  Settings,
   Upload,
 } from "lucide-react";
 import Image from "next/image";
@@ -14,6 +15,8 @@ import { LibraryView } from "./library/library-view";
 import { SheetDetailView } from "./library/sheet-detail-view";
 import { UploadView } from "./library/upload-view";
 import { PianoView } from "./piano/piano-view";
+import { useSettings } from "./settings/settings-provider";
+import { SettingsView } from "./settings/settings-view";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -31,22 +34,27 @@ import {
 } from "./ui/tabs";
 
 const navigation = [
-  { value: "library", label: "Library", icon: Library },
-  { value: "upload", label: "Upload", icon: Upload },
-];
+  { value: "library", label: "nav.library", icon: Library },
+  { value: "upload", label: "nav.upload", icon: Upload },
+] as const;
 
-const tools = [{ value: "piano", label: "Piano", icon: Piano }];
-const tabs = [...navigation, ...tools];
+const tools = [{ value: "piano", label: "nav.piano", icon: Piano }] as const;
+const footer = [
+  { value: "settings", label: "nav.settings", icon: Settings },
+] as const;
+const tabs = [...navigation, ...tools, ...footer];
 
 export function AppShell() {
+  const { t } = useSettings();
   const [activeTab, setActiveTab] = useState("library");
   const [collapsed, setCollapsed] = useState(false);
   const [selectedSheet, setSelectedSheet] = useState<Sheet | null>(null);
   const [sheets, setSheets] = useState<Sheet[] | null>(null);
-  const [loadError, setLoadError] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
   const loadVersion = useRef(0);
-  const activeLabel =
-    tabs.find((tab) => tab.value === activeTab)?.label ?? "Library";
+  const activeLabel = t(
+    tabs.find((tab) => tab.value === activeTab)?.label ?? "nav.library",
+  );
 
   function handleTabChange(value: string) {
     setActiveTab(value);
@@ -67,12 +75,12 @@ export function AppShell() {
       })
       .then((rows) => {
         if (version !== loadVersion.current) return;
-        setLoadError("");
+        setLoadFailed(false);
         setSheets(rows);
       })
       .catch(() => {
         if (version !== loadVersion.current) return;
-        setLoadError("Could not load sheets.");
+        setLoadFailed(true);
         setSheets([]);
       });
   }, []);
@@ -103,36 +111,52 @@ export function AppShell() {
           <span className="brand-name">PianoGo</span>
         </div>
 
-        <nav aria-label="Main navigation">
+        <nav aria-label={t("nav.mainNavigation")} className="sidebar-nav">
           <div className="navigation-group">
-            <span className="navigation-label">Navigation</span>
+            <span className="navigation-label">{t("nav.navigation")}</span>
             <TabsList className="sidebar-tabs-list" variant="line">
               {navigation.map(({ value, label, icon: Icon }) => (
                 <TabsTrigger
                   className="sidebar-tab-trigger"
                   key={value}
-                  title={label}
+                  title={t(label)}
                   value={value}
                 >
                   <Icon aria-hidden="true" size={16} strokeWidth={1.8} />
-                  <span>{label}</span>
+                  <span>{t(label)}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
           </div>
 
           <div className="navigation-group">
-            <span className="navigation-label">Tools</span>
+            <span className="navigation-label">{t("nav.tools")}</span>
             <TabsList className="sidebar-tabs-list" variant="line">
               {tools.map(({ value, label, icon: Icon }) => (
                 <TabsTrigger
                   className="sidebar-tab-trigger"
                   key={value}
-                  title={label}
+                  title={t(label)}
                   value={value}
                 >
                   <Icon aria-hidden="true" size={16} strokeWidth={1.8} />
-                  <span>{label}</span>
+                  <span>{t(label)}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+
+          <div className="sidebar-footer">
+            <TabsList className="sidebar-tabs-list" variant="line">
+              {footer.map(({ value, label, icon: Icon }) => (
+                <TabsTrigger
+                  className="sidebar-tab-trigger"
+                  key={value}
+                  title={t(label)}
+                  value={value}
+                >
+                  <Icon aria-hidden="true" size={16} strokeWidth={1.8} />
+                  <span>{t(label)}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -143,7 +167,9 @@ export function AppShell() {
       <div className="main-column">
         <header className="topbar">
           <Button
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={
+              collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")
+            }
             className="sidebar-toggle"
             onClick={() => setCollapsed((current) => !current)}
             size="icon"
@@ -157,7 +183,7 @@ export function AppShell() {
           </Button>
           <Breadcrumb className="breadcrumb">
             <BreadcrumbList>
-              <BreadcrumbItem>Workspace</BreadcrumbItem>
+              <BreadcrumbItem>{t("nav.workspace")}</BreadcrumbItem>
               <BreadcrumbSeparator />
               {selectedSheet ? (
                 <>
@@ -189,7 +215,7 @@ export function AppShell() {
         <main className="workspace">
           {tabs.map(({ value, label }) => (
             <TabsContent
-              aria-label={label}
+              aria-label={t(label)}
               className="workspace-tab-content"
               key={value}
               value={value}
@@ -219,7 +245,7 @@ export function AppShell() {
               ) : null}
               {value === "library" && !selectedSheet && sheets ? (
                 <LibraryView
-                  loadError={loadError}
+                  loadError={loadFailed ? t("nav.loadError") : ""}
                   onSelectSheet={setSelectedSheet}
                   sheets={sheets}
                 />
@@ -239,6 +265,7 @@ export function AppShell() {
                   sheets={sheets ?? []}
                 />
               ) : null}
+              {value === "settings" ? <SettingsView /> : null}
             </TabsContent>
           ))}
         </main>

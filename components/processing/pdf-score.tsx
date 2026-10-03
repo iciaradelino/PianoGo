@@ -10,6 +10,7 @@ import {
 import { STEP_SEMITONES } from "@/lib/processing/pdf/find-notes";
 import type { PdfNoteRecord } from "@/lib/processing/repository";
 import { noteName } from "@/lib/processing/solfege";
+import { useSettings } from "@/components/settings/settings-provider";
 
 // Label sizes are in score units, where one staff space is 10.
 const SCORE_UNITS_PER_SPACE = 10;
@@ -276,8 +277,9 @@ export function PdfScore({
   labelStyle,
   notes,
   generating = false,
-  generatingMessage = "Finding note names…",
+  generatingMessage,
 }: PdfScoreProps) {
+  const { t } = useSettings();
   const [loaded, setLoaded] = useState<LoadState>();
   const current = loaded?.url === fileUrl ? loaded : undefined;
 
@@ -322,10 +324,10 @@ export function PdfScore({
 
   return (
     <div aria-label={title} className="score-file score-pdf" role="img">
-      {!current ? <p className="score-musicxml-status">Loading score…</p> : null}
+      {!current ? <p className="score-musicxml-status">{t("score.loading")}</p> : null}
       {current && "failed" in current ? (
         <p className="score-musicxml-status">
-          This PDF could not be displayed.
+          {t("score.pdfFailed")}
         </p>
       ) : null}
       {current && "document" in current
@@ -344,7 +346,7 @@ export function PdfScore({
         <div className="score-generating" role="status">
           <span className="score-generating-badge">
             <LoaderCircle aria-hidden="true" className="animate-spin" />
-            {generatingMessage}
+            {generatingMessage ?? t("score.findingNotes")}
           </span>
         </div>
       ) : null}
