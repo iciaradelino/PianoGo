@@ -1,5 +1,6 @@
 import { deleteSheet, updateSheet } from "@/lib/library/repository";
 import { SheetInputError } from "@/lib/library/model";
+import { deleteAnnotations } from "@/lib/processing/repository";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,8 @@ export async function PATCH(request: Request, context: SheetRouteContext) {
 
 export async function DELETE(_request: Request, context: SheetRouteContext) {
   const { id } = await context.params;
+  // Annotations reference the sheet, so they have to go first.
+  deleteAnnotations(Number(id));
   if (!deleteSheet(Number(id))) {
     return NextResponse.json({ error: "Sheet not found." }, { status: 404 });
   }

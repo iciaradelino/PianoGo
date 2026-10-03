@@ -1,7 +1,7 @@
 "use client";
 
 import { FileMusic, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   Difficulty,
   PracticeStatus,
@@ -23,19 +23,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { musicXmlPreview } from "@/components/processing/musicxml-preview";
+
+function useMusicXmlPreview(sheet: Sheet) {
+  const fileUrl = `/api/sheets/${sheet.id}/file`;
+  const enabled = sheet.fileType !== "pdf";
+  const [rendered, setRendered] = useState<{ url: string; src: string | null }>();
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    void musicXmlPreview(fileUrl, sheet.title).then((src) => {
+      if (!cancelled) setRendered({ url: fileUrl, src });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, fileUrl, sheet.title]);
+
+  return enabled && rendered?.url === fileUrl ? rendered.src : null;
+}
 
 function SheetPreview({ sheet }: { sheet: Sheet }) {
   const [failed, setFailed] = useState(false);
-  const showImage = sheet.fileType === "pdf" && !failed;
+  const musicXmlSrc = useMusicXmlPreview(sheet);
+  const src =
+    sheet.fileType === "pdf" ? `/api/sheets/${sheet.id}/preview` : musicXmlSrc;
 
   return (
     <div className="sheet-preview" aria-hidden="true">
-      {showImage ? (
+      {src && !failed ? (
         <img
           alt=""
           className="sheet-preview-image"
           onError={() => setFailed(true)}
-          src={`/api/sheets/${sheet.id}/preview`}
+          src={src}
         />
       ) : (
         <FileMusic size={28} strokeWidth={1.4} />

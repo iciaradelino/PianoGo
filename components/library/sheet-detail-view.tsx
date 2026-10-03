@@ -2,7 +2,9 @@
 
 import {
   ArrowLeft,
+  Check,
   Download,
+  LoaderCircle,
   Minus,
   MousePointerClick,
   Pencil,
@@ -12,7 +14,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Difficulty, PracticeStatus, Sheet } from "@/lib/library/model";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +26,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { MusicXmlScore } from "@/components/processing/musicxml-score";
 
 const zoomSteps = [0.75, 1, 1.25, 1.5];
+// Keeps the loading state on screen long enough to read, even for short scores.
+const minimumGeneratingMs = 900;
+
+type AnnotationState = "checking" | "none" | "generating" | "ready";
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 type SheetDetailViewProps = {
   sheet: Sheet;
@@ -43,7 +54,10 @@ export function SheetDetailView({
   onDelete,
 }: SheetDetailViewProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const sheetIdRef = useRef(sheet.id);
   const [seenId, setSeenId] = useState(sheet.id);
+  const [annotationState, setAnnotationState] =
+    useState<AnnotationState>("checking");
   const [annotationsVisible, setAnnotationsVisible] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(sheet.title);
@@ -62,6 +76,60 @@ export function SheetDetailView({
     setZoom(1);
     setConfirmRemove(false);
     setError("");
+    setAnnotationState("checking");
+    setAnnotationsVisible(true);
+  }
+
+  useEffect(() => {
+    sheetIdRef.current = sheet.id;
+    if (sheet.fileType !== "musicxml") return;
+    let cancelled = false;
+
+    async function loadAnnotationStatus() {
+      try {
+        const response = await fetch(`/api/annotations?sheetId=${sheet.id}`);
+        const payload = (await response.json()) as { status?: string };
+        if (cancelled) return;
+        setAnnotationState(
+          response.ok && payload.status === "ready" ? "ready" : "none",
+        );
+      } catch {
+        if (!cancelled) setAnnotationState("none");
+      }
+    }
+
+    void loadAnnotationStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [sheet.id, sheet.fileType]);
+
+  async function handleGenerateAnnotations() {
+    const sheetId = sheet.id;
+    setAnnotationState("generating");
+    setError("");
+    try {
+      const [response] = await Promise.all([
+        fetch("/api/annotations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sheetId }),
+        }),
+        delay(minimumGeneratingMs),
+      ]);
+      if (sheetIdRef.current !== sheetId) return;
+      if (!response.ok) {
+        setAnnotationState("none");
+        setError("Could not generate annotations.");
+        return;
+      }
+      setAnnotationsVisible(true);
+      setAnnotationState("ready");
+    } catch {
+      if (sheetIdRef.current !== sheetId) return;
+      setAnnotationState("none");
+      setError("Could not generate annotations.");
+    }
   }
 
   async function save(next: {
@@ -193,10 +261,15 @@ export function SheetDetailView({
                   title={sheet.title}
                 />
               ) : (
-                <div className="score-file score-file-note">
-                  <p>{sheet.title} is saved.</p>
-                  <p>Score preview is available for PDF files.</p>
-                </div>
+                <MusicXmlScore
+                  annotationsVisible={
+                    annotationState === "ready" && annotationsVisible
+                  }
+                  generating={annotationState === "generating"}
+                  fileUrl={fileUrl}
+                  title={sheet.title}
+                  zoom={zoom}
+                />
               )}
             </div>
           </div>
@@ -372,15 +445,38 @@ export function SheetDetailView({
                 <span>Show</span>
                 <Switch
                   aria-label="Show annotations"
-                  checked={annotationsVisible}
+                  checked={annotationState === "ready" && annotationsVisible}
+                  disabled={annotationState !== "ready"}
                   onCheckedChange={setAnnotationsVisible}
                 />
               </div>
             </div>
             <div className="annotation-actions">
-              <Button type="button" variant="outline">
-                <Sparkles aria-hidden="true" />
-                Generate annotations
+              <Button
+                aria-busy={annotationState === "generating"}
+                disabled={
+                  sheet.fileType !== "musicxml" || annotationState !== "none"
+                }
+                onClick={() => void handleGenerateAnnotations()}
+                type="button"
+                variant="outline"
+              >
+                {annotationState === "generating" ? (
+                  <>
+                    <LoaderCircle aria-hidden="true" className="animate-spin" />
+                    Generating annotations…
+                  </>
+                ) : annotationState === "ready" ? (
+                  <>
+                    <Check aria-hidden="true" />
+                    Annotations generated
+                  </>
+                ) : (
+                  <>
+                    <Sparkles aria-hidden="true" />
+                    Generate annotations
+                  </>
+                )}
               </Button>
               <Button type="button" variant="outline">
                 <MousePointerClick aria-hidden="true" />

@@ -1066,6 +1066,111 @@ button {
   font-size: 0.875rem;
 }
 
+.score-musicxml {
+  position: relative;
+  height: auto;
+  min-height: 100%;
+  padding: 1rem 0;
+}
+
+.score-musicxml-status {
+  margin: 0;
+  padding: 2rem;
+  color: #71717a;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.score-generating {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 6rem;
+  background: rgb(255 255 255 / 55%);
+  animation: score-generating-in 150ms ease-out;
+}
+
+.score-generating::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgb(37 99 235 / 10%) 50%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  animation: score-generating-sweep 1.2s linear infinite;
+}
+
+.score-generating-badge {
+  position: sticky;
+  top: 1rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0.5rem 0.875rem;
+  color: #2563eb;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 8%);
+}
+
+.score-generating-badge svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.solfege-label {
+  animation: solfege-label-in 250ms ease-out both;
+
+  fill: #2563eb;
+  font-family: var(--font-sans, system-ui), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+}
+
+@keyframes score-generating-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes score-generating-sweep {
+  from {
+    background-position: 125% 0;
+  }
+  to {
+    background-position: -125% 0;
+  }
+}
+
+@keyframes solfege-label-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score-generating,
+  .score-generating::after,
+  .solfege-label {
+    animation: none;
+  }
+}
+
 .sheet-inspector {
   min-height: 0;
   overflow-y: auto;
