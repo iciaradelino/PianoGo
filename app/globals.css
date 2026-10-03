@@ -1080,6 +1080,17 @@ button {
   padding: 1rem 0;
 }
 
+.annotation-note {
+  margin: 0.75rem 0 0;
+  color: #71717a;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.annotation-note-error {
+  color: #b91c1c;
+}
+
 .score-pdf {
   position: relative;
   display: flex;

@@ -47,8 +47,10 @@ type Staff = {
   barlines: number[];
 };
 
-type Clef = { letter: ClefLetter; octaveShift: number; step: number };
-type Key = Map<number, number>;
+/** `step` is the clef's own line, in steps up from the staff's reference line. */
+export type Clef = { letter: ClefLetter; octaveShift: number; step: number };
+/** Alteration of each step index (C = 0 … B = 6) in the key signature. */
+export type Key = Map<number, number>;
 
 /** What carries over from one system, or page, to the next. */
 export type ScoreContext = {
@@ -85,7 +87,12 @@ const CLEF_PITCH: Record<ClefLetter, number> = {
   C: 4 * 7 + 0, // C4
 };
 
-const TREBLE: Clef = { letter: "G", octaveShift: 0, step: 2 };
+export const TREBLE: Clef = { letter: "G", octaveShift: 0, step: 2 };
+
+/** Step index (C = 0 … B = 6) of a diatonic number. */
+export function stepIndexOf(diatonic: number) {
+  return ((diatonic % 7) + 7) % 7;
+}
 
 type Line = { at: number; start: number; end: number };
 
@@ -275,7 +282,8 @@ function staffFor(glyph: PlacedGlyph, staves: Staff[]) {
   return bestDistance <= MAX_STEPS_OUTSIDE_STAFF ? best : null;
 }
 
-function diatonicAt(clef: Clef, step: number) {
+/** Diatonic number (octave * 7 + step index) of a note `step` steps up. */
+export function diatonicAt(clef: Clef, step: number) {
   return CLEF_PITCH[clef.letter] + clef.octaveShift * 7 + (step - clef.step);
 }
 
@@ -399,7 +407,7 @@ function readStaff(
       for (const item of event.accidentals) {
         if (item.alter === 0) continue;
         const diatonic = diatonicAt(clef, item.step);
-        key.set(((diatonic % 7) + 7) % 7, item.alter);
+        key.set(stepIndexOf(diatonic), item.alter);
       }
     } else if (event.kind === "barline") {
       measure += 1;
@@ -408,7 +416,7 @@ function readStaff(
       const { head } = event;
       const diatonic = diatonicAt(clef, head.step);
       if (head.alter !== null) barAccidentals.set(diatonic, head.alter);
-      const stepIndex = ((diatonic % 7) + 7) % 7;
+      const stepIndex = stepIndexOf(diatonic);
       const glyph = head.glyph;
       notes.push({
         x: glyph.x,

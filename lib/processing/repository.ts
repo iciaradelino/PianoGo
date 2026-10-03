@@ -1,5 +1,11 @@
 import { getDb } from "@/lib/db";
 import { readSheetFile } from "@/lib/library/repository";
+import {
+  audiverisPath,
+  recognise,
+  type OmrProgress,
+} from "@/lib/processing/omr/audiveris";
+import { readOmrProject } from "@/lib/processing/omr/read-omr";
 import { extractPdfNotes, type PdfPageNote } from "@/lib/processing/pdf/extract";
 import {
   STEP_SEMITONES,
@@ -12,13 +18,29 @@ import {
   type AnnotationStyle,
 } from "@/lib/processing/annotation-style";
 
-export type AnnotationStatus = "none" | "ready";
+export type AnnotationStatus = "none" | "processing" | "ready" | "failed";
 
 export type AnnotationRecord = {
   sheetId: number;
   status: AnnotationStatus;
   style: AnnotationStyle;
+  /** While a scan is being read: the page Audiveris is on. */
+  progress?: OmrProgress;
 };
+
+// Scans being read in the background, by sheet. Kept on globalThis so a dev
+// hot reload does not forget jobs that are still running.
+const scanJobs = ((globalThis as { pianogoScanJobs?: Map<number, OmrProgress | null> })
+  .pianogoScanJobs ??= new Map<number, OmrProgress | null>());
+
+const STATUSES: AnnotationStatus[] = ["none", "processing", "ready", "failed"];
+
+function statusOf(sheetId: number, stored: string | null): AnnotationStatus {
+  const status = STATUSES.find((candidate) => candidate === stored) ?? "none";
+  // A job that stopped with the server will never finish.
+  if (status === "processing" && !scanJobs.has(sheetId)) return "failed";
+  return status;
+}
 
 function validSheetId(sheetId: number) {
   return Number.isInteger(sheetId) && sheetId > 0;
@@ -47,10 +69,12 @@ export function getAnnotation(sheetId: number): AnnotationRecord | null {
     | { status: string | null; style: string | null }
     | undefined;
   if (!row) return null;
+  const progress = scanJobs.get(sheetId);
   return {
     sheetId,
-    status: row.status === "ready" ? "ready" : "none",
+    status: statusOf(sheetId, row.status),
     style: parseStoredStyle(row.style),
+    ...(progress ? { progress } : {}),
   };
 }
 
@@ -71,7 +95,7 @@ export type PdfNoteRecord = {
 
 export type GenerateResult =
   | { ok: true; annotation: AnnotationRecord }
-  | { ok: false; reason: "not-found" | "no-notation" };
+  | { ok: false; reason: "not-found" | "no-reader" };
 
 // MIDI number of A0, the lowest key on a piano.
 const LOWEST_PIANO_MIDI = 21;
@@ -82,16 +106,16 @@ function pianoKeyIndex(note: PdfNote) {
 }
 
 /** Creates or refreshes the sheet's annotation row, keeping its style. */
-function saveAnnotation(sheetId: number) {
+function saveAnnotation(sheetId: number, status: AnnotationStatus = "ready") {
   return getDb()
     .prepare(
       `INSERT INTO annotations (sheet_id, status, created_at)
-       VALUES (?, 'ready', ?)
+       VALUES (?, ?, ?)
        ON CONFLICT (sheet_id) DO UPDATE
        SET status = excluded.status, created_at = excluded.created_at
        RETURNING id`,
     )
-    .get(sheetId, new Date().toISOString()) as { id: number };
+    .get(sheetId, status, new Date().toISOString()) as { id: number };
 }
 
 function savePdfNotes(sheetId: number, notes: PdfPageNote[]) {
@@ -126,9 +150,41 @@ function savePdfNotes(sheetId: number, notes: PdfPageNote[]) {
 }
 
 /**
+ * Reads a scan with Audiveris in the background, then stores its notes. The
+ * annotation stays "processing" until then, and the viewer polls for it.
+ */
+function startScanJob(
+  sheetId: number,
+  pdf: Buffer,
+  pages: { width: number; height: number }[],
+) {
+  scanJobs.set(sheetId, null);
+  saveAnnotation(sheetId, "processing");
+
+  void recognise(pdf, pages.length, (progress) => {
+    scanJobs.set(sheetId, progress);
+  })
+    .then((project) => {
+      const notes = readOmrProject(project, pages);
+      if (notes.length === 0) throw new Error("No notes were recognised.");
+      savePdfNotes(sheetId, notes);
+    })
+    .catch((error: unknown) => {
+      console.error(`Could not read the scan of sheet ${sheetId}.`, error);
+      try {
+        saveAnnotation(sheetId, "failed");
+      } catch {
+        // The sheet was removed while it was being read.
+      }
+    })
+    .finally(() => scanJobs.delete(sheetId));
+}
+
+/**
  * Annotates a sheet. MusicXML scores are named in the browser as they are
- * drawn, so only the annotation is recorded. PDFs are read here, and every
- * note is stored with its position on the page.
+ * drawn, so only the annotation is recorded. PDFs exported from notation
+ * software are read here at once; any other PDF, such as a scan, is handed to
+ * Audiveris and finishes in the background.
  */
 export async function generateAnnotations(
   sheetId: number,
@@ -139,11 +195,15 @@ export async function generateAnnotations(
 
   if (file.fileType === "musicxml") {
     saveAnnotation(sheetId);
-  } else {
-    const { notes } = await extractPdfNotes(new Uint8Array(file.bytes));
-    // No notes means the PDF holds no notation font, as with scans.
-    if (notes.length === 0) return { ok: false, reason: "no-notation" };
-    savePdfNotes(sheetId, notes);
+  } else if (!scanJobs.has(sheetId)) {
+    const { notes, pages } = await extractPdfNotes(new Uint8Array(file.bytes));
+    if (notes.length > 0) {
+      savePdfNotes(sheetId, notes);
+    } else {
+      // No notation font was found, as with scans.
+      if (!audiverisPath()) return { ok: false, reason: "no-reader" };
+      startScanJob(sheetId, file.bytes, pages);
+    }
   }
 
   const annotation = getAnnotation(sheetId);

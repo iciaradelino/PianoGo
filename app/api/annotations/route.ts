@@ -38,17 +38,18 @@ export async function POST(request: Request) {
 
   const result = await generateAnnotations(Number(body.sheetId));
   if (!result.ok) {
-    return result.reason === "no-notation"
+    return result.reason === "no-reader"
       ? NextResponse.json(
           {
             error:
-              "No printed notation was found in this PDF. Scanned sheets are not supported yet.",
+              "This looks like a scanned sheet. Reading scans needs Audiveris, which is not installed on this server.",
           },
-          { status: 422 },
+          { status: 503 },
         )
       : NextResponse.json({ error: "Sheet not found." }, { status: 404 });
   }
-  return NextResponse.json(result.annotation, { status: 201 });
+  const processing = result.annotation.status === "processing";
+  return NextResponse.json(result.annotation, { status: processing ? 202 : 201 });
 }
 
 export async function PATCH(request: Request) {
