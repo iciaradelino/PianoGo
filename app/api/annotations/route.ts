@@ -1,6 +1,6 @@
 import {
+  generateAnnotations,
   getAnnotation,
-  markAnnotated,
   updateAnnotationStyle,
 } from "@/lib/processing/repository";
 import { NextResponse } from "next/server";
@@ -36,14 +36,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const annotation = markAnnotated(Number(body.sheetId));
-  if (!annotation) {
-    return NextResponse.json(
-      { error: "Annotations are available for MusicXML sheets only." },
-      { status: 404 },
-    );
+  const result = await generateAnnotations(Number(body.sheetId));
+  if (!result.ok) {
+    return result.reason === "no-notation"
+      ? NextResponse.json(
+          {
+            error:
+              "No printed notation was found in this PDF. Scanned sheets are not supported yet.",
+          },
+          { status: 422 },
+        )
+      : NextResponse.json({ error: "Sheet not found." }, { status: 404 });
   }
-  return NextResponse.json(annotation, { status: 201 });
+  return NextResponse.json(result.annotation, { status: 201 });
 }
 
 export async function PATCH(request: Request) {

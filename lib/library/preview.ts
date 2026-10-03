@@ -1,9 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createCanvas, Path2D } from "@napi-rs/canvas";
 import { readSheetFile, sheetPreviewPath } from "@/lib/library/repository";
-
-globalThis.Path2D = Path2D as typeof globalThis.Path2D;
 
 const previewWidth = 480;
 
@@ -15,8 +12,23 @@ type PdfPage = {
   }) => { promise: Promise<void> };
 };
 
+type PdfCanvas = {
+  width: number;
+  height: number;
+  toBuffer: (mimeType: "image/png") => Buffer;
+};
+
 type PdfDocument = {
   getPage: (pageNumber: number) => Promise<PdfPage>;
+  // pdf.js draws images on canvases from its own copy of @napi-rs/canvas.
+  // Mixing in canvases or Path2D from another copy crashes Node on pages
+  // with images, such as scans, so every canvas comes from here.
+  canvasFactory: {
+    create: (
+      width: number,
+      height: number,
+    ) => { canvas: PdfCanvas; context: CanvasRenderingContext2D | null };
+  };
   destroy: () => Promise<void>;
 };
 
@@ -54,15 +66,14 @@ async function renderPreview(id: number) {
     const page = await pdf.getPage(1);
     const base = page.getViewport({ scale: 1 });
     const viewport = page.getViewport({ scale: previewWidth / base.width });
-    const canvas = createCanvas(viewport.width, viewport.height);
-    const context = canvas.getContext("2d");
+    const { canvas, context } = pdf.canvasFactory.create(
+      Math.floor(viewport.width),
+      Math.floor(viewport.height),
+    );
     if (!context) return null;
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({
-      canvasContext: context as unknown as CanvasRenderingContext2D,
-      viewport,
-    }).promise;
+    await page.render({ canvasContext: context, viewport }).promise;
 
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const temporary = `${target}.tmp`;

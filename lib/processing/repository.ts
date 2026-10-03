@@ -1,4 +1,11 @@
 import { getDb } from "@/lib/db";
+import { readSheetFile } from "@/lib/library/repository";
+import { extractPdfNotes, type PdfPageNote } from "@/lib/processing/pdf/extract";
+import {
+  STEP_SEMITONES,
+  type PdfNote,
+  type Step,
+} from "@/lib/processing/pdf/find-notes";
 import {
   defaultAnnotationStyle,
   parseAnnotationStyle,
@@ -47,28 +54,119 @@ export function getAnnotation(sheetId: number): AnnotationRecord | null {
   };
 }
 
-/**
- * Records that a MusicXML sheet has been annotated, keeping any style it
- * already had. Returns null when the sheet does not exist or is not MusicXML
- * (PDF annotation is not supported yet).
- */
-export function markAnnotated(sheetId: number): AnnotationRecord | null {
-  if (!validSheetId(sheetId)) return null;
+export type PdfNoteRecord = {
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  staffSpace: number;
+  staffBottom: number;
+  step: Step;
+  alter: number;
+  octave: number;
+  measure: number;
+  pianoKeyIndex: number;
+};
 
-  const sheet = getDb()
-    .prepare(`SELECT file_type FROM sheets WHERE id = ?`)
-    .get(sheetId) as { file_type: string } | undefined;
-  if (sheet?.file_type !== "musicxml") return null;
+export type GenerateResult =
+  | { ok: true; annotation: AnnotationRecord }
+  | { ok: false; reason: "not-found" | "no-notation" };
 
-  getDb()
+// MIDI number of A0, the lowest key on a piano.
+const LOWEST_PIANO_MIDI = 21;
+
+function pianoKeyIndex(note: PdfNote) {
+  const midi = (note.octave + 1) * 12 + STEP_SEMITONES[note.step] + note.alter;
+  return midi - LOWEST_PIANO_MIDI;
+}
+
+/** Creates or refreshes the sheet's annotation row, keeping its style. */
+function saveAnnotation(sheetId: number) {
+  return getDb()
     .prepare(
       `INSERT INTO annotations (sheet_id, status, created_at)
        VALUES (?, 'ready', ?)
        ON CONFLICT (sheet_id) DO UPDATE
-       SET status = excluded.status, created_at = excluded.created_at`,
+       SET status = excluded.status, created_at = excluded.created_at
+       RETURNING id`,
     )
-    .run(sheetId, new Date().toISOString());
-  return getAnnotation(sheetId);
+    .get(sheetId, new Date().toISOString()) as { id: number };
+}
+
+function savePdfNotes(sheetId: number, notes: PdfPageNote[]) {
+  const database = getDb();
+  const insert = database.prepare(
+    `INSERT INTO pdf_notes (
+       annotation_id, page, x, y, width, height, staff_space, staff_bottom,
+       step, alteration, octave, measure, piano_key_index
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  database.transaction(() => {
+    const { id } = saveAnnotation(sheetId);
+    database.prepare(`DELETE FROM pdf_notes WHERE annotation_id = ?`).run(id);
+    for (const note of notes) {
+      insert.run(
+        id,
+        note.page,
+        note.x,
+        note.y,
+        note.width,
+        note.height,
+        note.staffSpace,
+        note.staffBottom,
+        note.step,
+        note.alter,
+        note.octave,
+        note.measure,
+        pianoKeyIndex(note),
+      );
+    }
+  })();
+}
+
+/**
+ * Annotates a sheet. MusicXML scores are named in the browser as they are
+ * drawn, so only the annotation is recorded. PDFs are read here, and every
+ * note is stored with its position on the page.
+ */
+export async function generateAnnotations(
+  sheetId: number,
+): Promise<GenerateResult> {
+  if (!validSheetId(sheetId)) return { ok: false, reason: "not-found" };
+  const file = readSheetFile(sheetId);
+  if (!file) return { ok: false, reason: "not-found" };
+
+  if (file.fileType === "musicxml") {
+    saveAnnotation(sheetId);
+  } else {
+    const { notes } = await extractPdfNotes(new Uint8Array(file.bytes));
+    // No notes means the PDF holds no notation font, as with scans.
+    if (notes.length === 0) return { ok: false, reason: "no-notation" };
+    savePdfNotes(sheetId, notes);
+  }
+
+  const annotation = getAnnotation(sheetId);
+  return annotation
+    ? { ok: true, annotation }
+    : { ok: false, reason: "not-found" };
+}
+
+export function getPdfNotes(sheetId: number): PdfNoteRecord[] {
+  if (!validSheetId(sheetId)) return [];
+
+  return getDb()
+    .prepare(
+      `SELECT page, x, y, width, height,
+              staff_space AS staffSpace, staff_bottom AS staffBottom,
+              step, alteration AS "alter", octave, measure,
+              piano_key_index AS pianoKeyIndex
+       FROM pdf_notes
+       JOIN annotations ON annotations.id = pdf_notes.annotation_id
+       WHERE annotations.sheet_id = ?
+       ORDER BY page, pdf_notes.id`,
+    )
+    .all(sheetId) as PdfNoteRecord[];
 }
 
 /** Saves how a sheet's annotations look. Returns null if it has none yet. */
@@ -93,6 +191,12 @@ export function deleteAnnotations(sheetId: number) {
     database
       .prepare(
         `DELETE FROM notes
+         WHERE annotation_id IN (SELECT id FROM annotations WHERE sheet_id = ?)`,
+      )
+      .run(sheetId);
+    database
+      .prepare(
+        `DELETE FROM pdf_notes
          WHERE annotation_id IN (SELECT id FROM annotations WHERE sheet_id = ?)`,
       )
       .run(sheetId);

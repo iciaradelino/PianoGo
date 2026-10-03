@@ -50,11 +50,38 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 `;
 
+// Notes read from a PDF, with where their notehead sits on the page so that
+// labels can be drawn over the original file.
+const pdfNotesTable = `
+CREATE TABLE IF NOT EXISTS pdf_notes (
+  id INTEGER PRIMARY KEY,
+  annotation_id INTEGER NOT NULL REFERENCES annotations(id),
+  page INTEGER NOT NULL,
+  x REAL NOT NULL,
+  y REAL NOT NULL,
+  width REAL NOT NULL,
+  height REAL NOT NULL,
+  staff_space REAL NOT NULL,
+  staff_bottom REAL NOT NULL,
+  step TEXT NOT NULL CHECK (step IN ('C', 'D', 'E', 'F', 'G', 'A', 'B')),
+  alteration INTEGER NOT NULL,
+  octave INTEGER NOT NULL,
+  measure INTEGER NOT NULL,
+  piano_key_index INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS pdf_notes_annotation
+  ON pdf_notes (annotation_id, page);
+`;
+
 const globalForDb = globalThis as unknown as {
   pianogoDb?: Database.Database;
-  // Set once migrate() has run on the cached connection.
-  pianogoMigrated?: boolean;
+  // The MIGRATIONS_VERSION that migrate() last ran with on the cached connection.
+  pianogoMigrated?: number;
 };
+
+// Bump when migrate() changes, so a dev hot reload runs it again.
+const MIGRATIONS_VERSION = 2;
 
 export function dataDir() {
   return process.env.DATA_DIR
@@ -64,6 +91,7 @@ export function dataDir() {
 
 // CREATE TABLE IF NOT EXISTS leaves older tables alone, so add later columns here.
 function migrate(database: Database.Database) {
+  database.exec(pdfNotesTable);
   const annotationColumns = database
     .prepare(`PRAGMA table_info(annotations)`)
     .all() as { name: string }[];
@@ -78,9 +106,9 @@ export function getDb() {
   const cached = globalForDb.pianogoDb;
   if (cached) {
     // A dev hot reload keeps the connection but brings in new code.
-    if (!globalForDb.pianogoMigrated) {
+    if (globalForDb.pianogoMigrated !== MIGRATIONS_VERSION) {
       migrate(cached);
-      globalForDb.pianogoMigrated = true;
+      globalForDb.pianogoMigrated = MIGRATIONS_VERSION;
     }
     return cached;
   }
@@ -92,6 +120,6 @@ export function getDb() {
   database.exec(schema);
   migrate(database);
   globalForDb.pianogoDb = database;
-  globalForDb.pianogoMigrated = true;
+  globalForDb.pianogoMigrated = MIGRATIONS_VERSION;
   return database;
 }

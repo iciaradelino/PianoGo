@@ -14,6 +14,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import type { Difficulty, PracticeStatus, Sheet } from "@/lib/library/model";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,13 @@ import {
   parseAnnotationStyle,
   type AnnotationStyle,
 } from "@/lib/processing/annotation-style";
+import type { PdfNoteRecord } from "@/lib/processing/repository";
+
+// pdf.js only runs in the browser.
+const PdfScore = dynamic(
+  () => import("@/components/processing/pdf-score").then((module) => module.PdfScore),
+  { ssr: false },
+);
 
 const zoomSteps = [0.75, 1, 1.25, 1.5];
 // Keeps the loading state on screen long enough to read, even for short scores.
@@ -42,6 +50,13 @@ type AnnotationState = "checking" | "none" | "generating" | "ready";
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function fetchPdfNotes(sheetId: number) {
+  const response = await fetch(`/api/annotations/notes?sheetId=${sheetId}`);
+  if (!response.ok) throw new Error("Could not load the annotations.");
+  const payload = (await response.json()) as { notes?: PdfNoteRecord[] };
+  return payload.notes ?? [];
 }
 
 type SheetDetailViewProps = {
@@ -59,13 +74,13 @@ export function SheetDetailView({
   onUpdate,
   onDelete,
 }: SheetDetailViewProps) {
-  const frameRef = useRef<HTMLIFrameElement>(null);
   const sheetIdRef = useRef(sheet.id);
   const [seenId, setSeenId] = useState(sheet.id);
   const [annotationState, setAnnotationState] =
     useState<AnnotationState>("checking");
   const [annotationsVisible, setAnnotationsVisible] = useState(true);
   const [labelStyle, setLabelStyle] = useState(defaultAnnotationStyle);
+  const [pdfNotes, setPdfNotes] = useState<PdfNoteRecord[]>([]);
   const savedStyleRef = useRef(defaultAnnotationStyle);
   const styleRequestRef = useRef(0);
   const [renaming, setRenaming] = useState(false);
@@ -88,11 +103,11 @@ export function SheetDetailView({
     setAnnotationState("checking");
     setAnnotationsVisible(true);
     setLabelStyle(defaultAnnotationStyle);
+    setPdfNotes([]);
   }
 
   useEffect(() => {
     sheetIdRef.current = sheet.id;
-    if (sheet.fileType !== "musicxml") return;
     let cancelled = false;
 
     async function loadAnnotationStatus() {
@@ -104,11 +119,14 @@ export function SheetDetailView({
         };
         if (cancelled) return;
         const style = parseAnnotationStyle(payload.style);
+        const ready = response.ok && payload.status === "ready";
+        const notes =
+          ready && sheet.fileType === "pdf" ? await fetchPdfNotes(sheet.id) : [];
+        if (cancelled) return;
         savedStyleRef.current = style;
         setLabelStyle(style);
-        setAnnotationState(
-          response.ok && payload.status === "ready" ? "ready" : "none",
-        );
+        setPdfNotes(notes);
+        setAnnotationState(ready ? "ready" : "none");
       } catch {
         if (!cancelled) setAnnotationState("none");
       }
@@ -135,9 +153,18 @@ export function SheetDetailView({
       ]);
       if (sheetIdRef.current !== sheetId) return;
       if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (sheetIdRef.current !== sheetId) return;
         setAnnotationState("none");
-        setError("Could not generate annotations.");
+        setError(payload.error ?? "Could not generate annotations.");
         return;
+      }
+      if (sheet.fileType === "pdf") {
+        const notes = await fetchPdfNotes(sheetId);
+        if (sheetIdRef.current !== sheetId) return;
+        setPdfNotes(notes);
       }
       setAnnotationsVisible(true);
       setAnnotationState("ready");
@@ -220,12 +247,6 @@ export function SheetDetailView({
   }
 
   function handlePrint() {
-    const frameWindow = frameRef.current?.contentWindow;
-    if (frameWindow) {
-      frameWindow.focus();
-      frameWindow.print();
-      return;
-    }
     window.open(fileUrl, "_blank", "noopener,noreferrer");
   }
 
@@ -290,14 +311,20 @@ export function SheetDetailView({
 
           <div className="score-canvas">
             <div
-              className="score-zoom"
+              className={
+                sheet.fileType === "pdf" ? "score-zoom score-zoom-pdf" : "score-zoom"
+              }
               style={{ "--score-zoom": zoom } as React.CSSProperties}
             >
               {sheet.fileType === "pdf" ? (
-                <iframe
-                  className="score-file"
-                  ref={frameRef}
-                  src={fileUrl}
+                <PdfScore
+                  annotationsVisible={
+                    annotationState === "ready" && annotationsVisible
+                  }
+                  fileUrl={fileUrl}
+                  generating={annotationState === "generating"}
+                  labelStyle={labelStyle}
+                  notes={pdfNotes}
                   title={sheet.title}
                 />
               ) : (
@@ -495,9 +522,7 @@ export function SheetDetailView({
             <div className="annotation-actions">
               <Button
                 aria-busy={annotationState === "generating"}
-                disabled={
-                  sheet.fileType !== "musicxml" || annotationState !== "none"
-                }
+                disabled={annotationState !== "none"}
                 onClick={() => void handleGenerateAnnotations()}
                 type="button"
                 variant="outline"

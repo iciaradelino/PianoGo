@@ -1027,7 +1027,8 @@ button {
   width: 100%;
   height: 100%;
   min-height: 0;
-  justify-content: center;
+  /* "safe" keeps the left edge reachable when a zoomed page is wider. */
+  justify-content: safe center;
   overflow: auto;
   padding: 1.5rem;
   background: #e4e4e7;
@@ -1037,6 +1038,12 @@ button {
   width: min(100%, calc(50rem * var(--score-zoom, 1)));
   height: calc(100% * var(--score-zoom, 1));
   min-height: calc(36rem * var(--score-zoom, 1));
+}
+
+.score-zoom-pdf {
+  flex-shrink: 0;
+  width: calc(min(100%, 50rem) * var(--score-zoom, 1));
+  height: auto;
 }
 
 .score-file {
@@ -1071,6 +1078,38 @@ button {
   height: auto;
   min-height: 100%;
   padding: 1rem 0;
+}
+
+.score-pdf {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: auto;
+  background: transparent;
+  box-shadow: none;
+}
+
+.pdf-page {
+  position: relative;
+  width: 100%;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgb(0 0 0 / 10%);
+}
+
+.pdf-page-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pdf-page-labels {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
 
 .score-musicxml-status {
