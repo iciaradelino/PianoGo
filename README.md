@@ -1,5 +1,7 @@
 # PianoGo
 
+https://github.com/user-attachments/assets/fe9d6a74-cdce-4b74-8dbc-5597a366b40c
+
 PianoGo is a web app for beginner pianists. You upload sheet music (MusicXML or PDF), it labels every note (letter names or solfège), and you can practise measure by measure on an on-screen piano that shows which keys each hand plays.
 
 It runs as a **single Next.js process** with **SQLite**. No extra services are needed.
