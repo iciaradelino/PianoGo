@@ -7,6 +7,8 @@ import {
   LoaderCircle,
   Minus,
   MousePointerClick,
+  PanelRightClose,
+  PanelRightOpen,
   Pencil,
   Piano,
   Plus,
@@ -126,6 +128,9 @@ export function SheetDetailView({
   const [title, setTitle] = useState(sheet.title);
   const [composer, setComposer] = useState(sheet.composer);
   const [zoom, setZoom] = useState(1);
+  // With the panel closed, the score gets the room to show two pages.
+  const [panelOpen, setPanelOpen] = useState(true);
+  const spread = !panelOpen;
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -362,7 +367,11 @@ export function SheetDetailView({
 
   return (
     <section className="sheet-detail">
-      <div className="sheet-detail-body">
+      <div
+        className={
+          panelOpen ? "sheet-detail-body" : "sheet-detail-body sheet-detail-body-wide"
+        }
+      >
         <div className="score-viewer">
           <div className="score-toolbar">
             <span className="score-page-count">
@@ -390,14 +399,34 @@ export function SheetDetailView({
               >
                 <Plus aria-hidden="true" />
               </Button>
+              <span aria-hidden="true" className="toolbar-divider" />
+              <Button
+                aria-label={panelOpen ? t("sheet.hidePanel") : t("sheet.showPanel")}
+                aria-pressed={!panelOpen}
+                onClick={() => setPanelOpen((open) => !open)}
+                size="icon-sm"
+                title={panelOpen ? t("sheet.hidePanel") : t("sheet.showPanel")}
+                type="button"
+                variant="ghost"
+              >
+                {panelOpen ? (
+                  <PanelRightClose aria-hidden="true" />
+                ) : (
+                  <PanelRightOpen aria-hidden="true" />
+                )}
+              </Button>
             </div>
           </div>
 
           <div className="score-canvas">
             <div
-              className={
-                sheet.fileType === "pdf" ? "score-zoom score-zoom-pdf" : "score-zoom"
-              }
+              className={[
+                "score-zoom",
+                sheet.fileType === "pdf" ? "score-zoom-pdf" : "",
+                spread ? "score-zoom-spread" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               style={{ "--score-zoom": zoom } as React.CSSProperties}
             >
               {sheet.fileType === "pdf" ? (
@@ -417,6 +446,7 @@ export function SheetDetailView({
                   }
                   labelStyle={labelStyle}
                   notes={pdfNotes}
+                  spread={spread}
                   title={sheet.title}
                 />
               ) : (
@@ -427,6 +457,7 @@ export function SheetDetailView({
                   labelStyle={labelStyle}
                   generating={annotationState === "generating"}
                   fileUrl={fileUrl}
+                  spread={spread}
                   title={sheet.title}
                   zoom={zoom}
                 />
@@ -435,6 +466,7 @@ export function SheetDetailView({
           </div>
         </div>
 
+        {panelOpen ? (
         <aside className="sheet-inspector">
           <section className="sheet-summary">
             <div className="sheet-title-group">
@@ -692,6 +724,7 @@ export function SheetDetailView({
             </div>
           </section>
         </aside>
+        ) : null}
       </div>
     </section>
   );

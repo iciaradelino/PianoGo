@@ -49,6 +49,8 @@ type PdfScoreProps = {
   notes: PdfNoteRecord[];
   generating?: boolean;
   generatingMessage?: string;
+  /** Shows the pages two by two, like an open book. */
+  spread?: boolean;
 };
 
 async function openPdf(fileUrl: string) {
@@ -278,6 +280,7 @@ export function PdfScore({
   notes,
   generating = false,
   generatingMessage,
+  spread = false,
 }: PdfScoreProps) {
   const { t } = useSettings();
   const [loaded, setLoaded] = useState<LoadState>();
@@ -323,7 +326,7 @@ export function PdfScore({
   const visibleStyle = annotationsVisible ? labelStyle : null;
 
   return (
-    <div aria-label={title} className="score-file score-pdf" role="img">
+    <div aria-label={title} className={spread ? "score-file score-pdf score-pdf-spread" : "score-file score-pdf"} role="img">
       {!current ? <p className="score-musicxml-status">{t("score.loading")}</p> : null}
       {current && "failed" in current ? (
         <p className="score-musicxml-status">

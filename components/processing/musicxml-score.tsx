@@ -35,6 +35,8 @@ const BELOW_SPACING_SCALE = 0.85;
 const BELOW_ROWS = 3;
 const LINE_HEIGHT = 1.2;
 const BELOW_GAP = 6;
+// Space between the two pages of a spread; matches .score-musicxml-spread.
+const SPREAD_GAP_PX = 20;
 
 type MusicXmlScoreProps = {
   fileUrl: string;
@@ -43,6 +45,8 @@ type MusicXmlScoreProps = {
   annotationsVisible: boolean;
   labelStyle: AnnotationStyle;
   generating?: boolean;
+  /** Shows the score as pages, two side by side. */
+  spread?: boolean;
 };
 
 type LoadState = "loading" | "ready" | "error";
@@ -229,14 +233,35 @@ function applyLayoutRules(
   rules.MinSkyBottomDistBetweenSystems = base.systemGap + extraGap;
 }
 
+type PaintSettings = {
+  zoom: number;
+  labelStyle: AnnotationStyle | null;
+  spread: boolean;
+};
+
+/**
+ * Draws the score. In a spread it is cut into A4 pages, drawn at half the
+ * width so that two fit side by side; otherwise it is one endless page.
+ */
 function paint(
   osmd: OpenSheetMusicDisplay,
+  container: HTMLDivElement,
   base: BaseRules,
-  settings: { zoom: number; labelStyle: AnnotationStyle | null },
+  settings: PaintSettings,
 ) {
   osmd.zoom = settings.zoom;
+  osmd.setPageFormat(settings.spread ? "A4_P" : "Endless");
   applyLayoutRules(osmd, base, settings.labelStyle);
-  osmd.render();
+  if (settings.spread) {
+    // OSMD sizes each page to its container, so it is narrowed while drawing.
+    const width = container.parentElement?.clientWidth ?? container.clientWidth;
+    container.style.width = `${Math.floor((width - SPREAD_GAP_PX) / 2)}px`;
+  }
+  try {
+    osmd.render();
+  } finally {
+    container.style.width = "";
+  }
   if (settings.labelStyle) drawLabels(osmd, settings.labelStyle);
 }
 
@@ -247,6 +272,7 @@ export function MusicXmlScore({
   annotationsVisible,
   labelStyle,
   generating = false,
+  spread = false,
 }: MusicXmlScoreProps) {
   const { t } = useSettings();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -257,14 +283,18 @@ export function MusicXmlScore({
     systemGap: 0,
   });
   const visibleStyle = annotationsVisible ? labelStyle : null;
-  const settingsRef = useRef({ zoom, labelStyle: visibleStyle });
+  const settingsRef = useRef<PaintSettings>({
+    zoom,
+    labelStyle: visibleStyle,
+    spread,
+  });
   const [loaded, setLoaded] = useState<{ url: string; failed: boolean }>();
   const loadState: LoadState =
     loaded?.url !== fileUrl ? "loading" : loaded.failed ? "error" : "ready";
 
   useEffect(() => {
-    settingsRef.current = { zoom, labelStyle: visibleStyle };
-  }, [zoom, visibleStyle]);
+    settingsRef.current = { zoom, labelStyle: visibleStyle, spread };
+  }, [zoom, visibleStyle, spread]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -295,7 +325,7 @@ export function MusicXmlScore({
           staffGap: rules.MinSkyBottomDistBetweenStaves,
           systemGap: rules.MinSkyBottomDistBetweenSystems,
         };
-        paint(osmd, baseRulesRef.current, settingsRef.current);
+        paint(osmd, target, baseRulesRef.current, settingsRef.current);
         osmdRef.current = osmd;
         setLoaded({ url: fileUrl, failed: false });
       } catch {
@@ -314,16 +344,25 @@ export function MusicXmlScore({
 
   useEffect(() => {
     const osmd = osmdRef.current;
-    if (!osmd) return;
+    const container = containerRef.current;
+    if (!osmd || !container) return;
     try {
-      paint(osmd, baseRulesRef.current, { zoom, labelStyle: visibleStyle });
+      paint(osmd, container, baseRulesRef.current, {
+        zoom,
+        labelStyle: visibleStyle,
+        spread,
+      });
     } catch (error) {
       console.error("Could not redraw the score.", error);
     }
-  }, [zoom, visibleStyle]);
+  }, [zoom, visibleStyle, spread]);
 
   return (
-    <div className="score-file score-musicxml">
+    <div
+      className={
+        spread ? "score-file score-musicxml score-musicxml-spread" : "score-file score-musicxml"
+      }
+    >
       {loadState === "loading" ? (
         <p className="score-musicxml-status">{t("score.loading")}</p>
       ) : null}

@@ -1057,6 +1057,19 @@ button {
   min-height: 0;
 }
 
+.sheet-detail-body-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Overrides the min-width .zoom-controls span gives the zoom percentage. */
+.zoom-controls .toolbar-divider {
+  width: 1px;
+  min-width: 0;
+  height: 1.25rem;
+  margin: 0 0.25rem;
+  background: var(--app-border);
+}
+
 .score-viewer {
   display: grid;
   grid-template-rows: 3rem minmax(0, 1fr);
@@ -1106,6 +1119,11 @@ button {
   min-height: calc(36rem * var(--score-zoom, 1));
 }
 
+/* Two pages side by side need about twice the room. */
+.score-zoom.score-zoom-spread {
+  width: calc(min(100%, 100rem) * var(--score-zoom, 1));
+}
+
 .score-zoom-pdf {
   flex-shrink: 0;
   width: calc(min(100%, 50rem) * var(--score-zoom, 1));
@@ -1144,6 +1162,48 @@ button {
   height: auto;
   min-height: 100%;
   padding: 1rem 0;
+}
+
+/* Two pages side by side, like an open book. */
+.score-pdf.score-pdf-spread {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.score-pdf.score-pdf-spread > .score-musicxml-status,
+.score-pdf.score-pdf-spread > .score-generating {
+  grid-column: 1 / -1;
+}
+
+/* OSMD draws each page into its own block; the gap matches SPREAD_GAP_PX. */
+.score-musicxml.score-musicxml-spread {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.score-musicxml-spread > [role="img"] {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  justify-content: center;
+  align-items: start;
+  gap: 20px;
+}
+
+.score-musicxml-spread > [role="img"] > * {
+  background: var(--app-paper);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 10%);
+}
+
+@media (max-width: 48rem) {
+  .score-pdf.score-pdf-spread {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .score-musicxml-spread > [role="img"] {
+    grid-template-columns: max-content;
+  }
 }
 
 .annotation-note {
