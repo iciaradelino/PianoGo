@@ -3,7 +3,6 @@ import {
   diatonicAt,
   STEPS,
   stepIndexOf,
-  TREBLE,
   type Clef,
   type Key,
 } from "../pdf/find-notes";
@@ -46,6 +45,10 @@ const ALTERS: Record<string, number> = {
 
 // Order in which sharps (and, reversed, flats) enter a key signature.
 const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"] as const;
+
+// Used before any clef is recognised. Steps here count from the middle line,
+// where the G line is two steps down (find-notes' TREBLE counts from the bottom).
+const TREBLE: Clef = { letter: "G", octaveShift: 0, step: -2 };
 
 const OCTAVE_SHIFTS: Record<string, number> = {
   "8VA": 1,

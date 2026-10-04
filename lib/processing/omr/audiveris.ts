@@ -79,7 +79,10 @@ async function run(
       };
       child.stdout.on("data", watch);
       child.stderr.on("data", watch);
-      child.on("error", reject);
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
       // Audiveris exits with an error when any page is unreadable, such as a
       // cover; the saved project still holds every page it could read.
       child.on("close", () => {
