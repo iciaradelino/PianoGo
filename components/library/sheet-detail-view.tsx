@@ -6,7 +6,6 @@ import {
   Download,
   LoaderCircle,
   Minus,
-  MousePointerClick,
   PanelRightClose,
   PanelRightOpen,
   Pencil,
@@ -686,10 +685,6 @@ export function SheetDetailView({
                     {t("sheet.generate")}
                   </>
                 )}
-              </Button>
-              <Button type="button" variant="outline">
-                <MousePointerClick aria-hidden="true" />
-                {t("sheet.addManually")}
               </Button>
             </div>
             {annotationState === "processing" ? (

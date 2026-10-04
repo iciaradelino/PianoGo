@@ -136,7 +136,27 @@ To split them into services in Assignment 2, `readSheetFile(id)` becomes an HTTP
 
 The Audiveris job is an in-process promise queue that spawns a local program on demand, not a separate service or job runner, so it stays inside the single-process, single-container contract. Audiveris is optional: everything except scanned PDFs works without it.
 
-### 3.3 Deployment contract (§7)
+### 3.3 The three document types
+
+Section 3.2 shows the request flow. This section compares the three ways a document is turned into named notes, and why each one works that way.
+
+| | MusicXML (`.musicxml`, `.xml`, `.mxl`) | Digital (vector) PDF | Scanned PDF |
+| --- | --- | --- | --- |
+| How it is recognised | file extension at upload | PDF whose pages contain a known music font | PDF with no music font found (`extractPdfNotes` returns no notes) |
+| Where pitches come from | the file itself: every note already has a step, alteration and octave | the page's drawing operations, read with pdf.js | Audiveris's recognition of the page image (`.omr` project) |
+| Where the work runs | browser (OpenSheetMusicDisplay) | server, inside the `POST` request | server, background job queued one at a time |
+| Stored in SQLite | `annotations` row only | `annotations` + `pdf_notes` | `annotations` + `pdf_notes` |
+| API response | `201` | `201` | `202`, then polling until `ready` or `failed`; `503` without Audiveris |
+
+**MusicXML.** The pitch of every note is already written in the file, so there is nothing to work out. OpenSheetMusicDisplay parses and draws the score in the browser, and PianoGo adds a label beside each notehead as it is drawn. Storing the notes on the server would duplicate the uploaded file, so only the annotation's status and style are saved (ADR-3).
+
+**Digital PDF.** A PDF exported from notation software has no notes, only drawing instructions: lines and glyphs from an embedded music font. `read-page.ts` walks the pdf.js operator list and collects glyphs and straight lines in page coordinates. `music-glyphs.ts` identifies noteheads, clefs and accidentals in three font families (SMuFL fonts such as Bravura and Leland, MuseScore 2's MScore, and LilyPond's Emmentaler). `find-notes.ts` then groups lines into five-line staves, splits them into bars at barlines, and reads each notehead's pitch from its height on the staff, through the clef, the key signature and any accidental earlier in the bar. Each note is saved with its page position so the label can be drawn over the original PDF.
+
+**Scanned PDF.** A scan is only an image, so it needs optical music recognition. `audiveris.ts` runs Audiveris (`-batch -transcribe -save`) on a temporary copy of the PDF. Jobs run one at a time because each one uses a lot of memory, with a 15-minute timeout, and the current page is read from Audiveris's log to show progress. `read-omr.ts` unzips the saved `.omr` project, reads the noteheads, clefs, key signatures and accidentals it found, and works out pitches with the same staff logic as digital PDFs. Positions are scaled from the scanned image to the PDF page. The notes go into the same `pdf_notes` table, so the viewer draws scans and digital PDFs the same way.
+
+The two PDF paths share one table and one viewer, so recognising scans did not change the database or the score view. Audiveris is an optional local program, not part of the app, so its accuracy depends on the scan quality.
+
+### 3.4 Deployment contract (§7)
 
 | Requirement | How PianoGo meets it |
 | --- | --- |

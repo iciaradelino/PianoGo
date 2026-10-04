@@ -82,7 +82,6 @@ const en = {
   "sheet.tryAgain": "Try again",
   "sheet.generated": "Annotations generated",
   "sheet.generate": "Generate annotations",
-  "sheet.addManually": "Add manually",
   "sheet.scanNote":
     "Scanned sheets are read with optical music recognition, which takes about half a minute per page. You can leave this page.",
   "sheet.scanFailed":
@@ -239,7 +238,6 @@ const es: Record<MessageKey, string> = {
   "sheet.tryAgain": "Reintentar",
   "sheet.generated": "Anotaciones generadas",
   "sheet.generate": "Generar anotaciones",
-  "sheet.addManually": "Añadir manualmente",
   "sheet.scanNote":
     "Las partituras escaneadas se leen con reconocimiento óptico de música, que tarda aproximadamente medio minuto por página. Puedes salir de esta página.",
   "sheet.scanFailed":
