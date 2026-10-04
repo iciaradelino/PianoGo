@@ -42,10 +42,7 @@ describe("getDb", () => {
     expect(tables).toEqual(
       expect.arrayContaining([
         "sheets",
-        "tags",
-        "sheet_tags",
         "annotations",
-        "notes",
         "pdf_notes",
       ]),
     );

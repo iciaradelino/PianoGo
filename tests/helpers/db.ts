@@ -4,10 +4,7 @@ import { getDb } from "@/lib/db";
 export function resetDb() {
   getDb().exec(`
     DELETE FROM pdf_notes;
-    DELETE FROM notes;
     DELETE FROM annotations;
-    DELETE FROM sheet_tags;
-    DELETE FROM tags;
     DELETE FROM sheets;
   `);
 }

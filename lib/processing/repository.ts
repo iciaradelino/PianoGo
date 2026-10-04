@@ -250,12 +250,6 @@ export function deleteAnnotations(sheetId: number) {
   database.transaction(() => {
     database
       .prepare(
-        `DELETE FROM notes
-         WHERE annotation_id IN (SELECT id FROM annotations WHERE sheet_id = ?)`,
-      )
-      .run(sheetId);
-    database
-      .prepare(
         `DELETE FROM pdf_notes
          WHERE annotation_id IN (SELECT id FROM annotations WHERE sheet_id = ?)`,
       )

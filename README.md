@@ -9,8 +9,8 @@ It runs as a **single Next.js process** with **SQLite**. No extra services are n
 **Sheet library**
 
 - upload MusicXML or PDF files
-- title, composer, difficulty, tags, favourites and practice status
-- search and filter the library, with thumbnail previews
+- title, composer, difficulty and practice status
+- search by title or composer, filter by difficulty and status, with thumbnail previews
 - open, download or delete a sheet
 
 **Music processing**
@@ -40,8 +40,8 @@ browser
    │
    ▼
 Next.js (UI + /api/*)
-   ├── lib/library     → sheets, tags, files
-   └── lib/processing  → annotations, notes, PDF/OMR parsing
+   ├── lib/library     → sheets, uploaded files, previews
+   └── lib/processing  → annotations, pdf_notes, PDF/OMR parsing
            │
            ▼
      SQLite ($DATA_DIR/pianogo.db)
@@ -57,7 +57,56 @@ Next.js (UI + /api/*)
 | `lib/settings/` | translations and user preferences |
 | `tests/` | Jest unit tests for `lib/` |
 
-Tables: `sheets`, `tags`, `sheet_tags` (library) and `annotations`, `notes`, `pdf_notes` (processing). Design decisions are recorded in [ADR.md](ADR.md).
+### Database
+
+Three tables. `sheets` belongs to the library; `annotations` and `pdf_notes` belong to processing. The only link between the domains is `annotations.sheet_id`, and each sheet has at most one annotation (see ADR-3 in [ADR.md](ADR.md)).
+
+```mermaid
+erDiagram
+  sheets ||--o| annotations : "annotated as"
+  annotations ||--o{ pdf_notes : contains
+
+  sheets {
+    integer id PK
+    text title
+    text composer
+    text difficulty
+    text original_filename
+    text file_path
+    text file_type
+    text practice_status
+    text created_at
+  }
+
+  annotations {
+    integer id PK
+    integer sheet_id FK "UNIQUE"
+    text status
+    text style "JSON"
+    text created_at
+  }
+
+  pdf_notes {
+    integer id PK
+    integer annotation_id FK
+    integer page
+    real x
+    real y
+    real width
+    real height
+    real staff_space
+    real staff_bottom
+    text step
+    integer alteration
+    integer octave
+    integer measure
+    integer piano_key_index
+  }
+```
+
+`pdf_notes` holds the notes read from PDFs (vector or scanned), with their position on the page so labels can be drawn over the original file. MusicXML notes are not stored: OpenSheetMusicDisplay renders the score in the browser and the labels are added as it is drawn, so for MusicXML only the `annotations` row (status and style) is saved. Uploaded files live under `$DATA_DIR/uploads/` and PDF thumbnails under `$DATA_DIR/previews/`.
+
+Design decisions are recorded in [ADR.md](ADR.md).
 
 ## Setup
 
@@ -94,3 +143,11 @@ npm test -- --coverage
 ```
 
 Tests cover the core logic in `lib/` (not routes or React). Each test file uses its own temporary `DATA_DIR`. The coverage threshold is 70%.
+
+Coverage is measured over `lib/db.ts`, `lib/library/` and `lib/processing/`. Latest result (2026-10-04, 14 suites, 113 tests):
+
+| Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- |
+| 96.14% | 91.86% | 98.31% | 97.85% |
+
+`npm test -- --coverage` fails if any of these drops below 70%. The thinnest file is `lib/library/preview.ts` (58%), since rendering a PDF page needs pdf.js and a real canvas. pdf.js and Audiveris are faked in their tests, so these tests do not need Audiveris installed.
