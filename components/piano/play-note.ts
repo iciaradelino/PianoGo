@@ -1,7 +1,12 @@
 let audio: AudioContext | null = null;
+// Each key's sound is worked out once; doing it on every press stalls the page.
+const buffers = new Map<number, AudioBuffer>();
 
-function audioContext() {
+/** The audio clock notes are scheduled on, or null where there is no audio. */
+export function pianoContext() {
+  if (typeof window === "undefined" || !window.AudioContext) return null;
   if (!audio) audio = new AudioContext();
+  void audio.resume();
   return audio;
 }
 
@@ -9,12 +14,7 @@ function frequency(midi: number) {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
-export function playPianoNote(midi: number) {
-  if (typeof window === "undefined" || !window.AudioContext) return;
-
-  const context = audioContext();
-  void context.resume();
-
+function synthesize(context: AudioContext, midi: number) {
   const duration = 1.5;
   const sampleRate = context.sampleRate;
   const length = Math.floor(sampleRate * duration);
@@ -38,9 +38,36 @@ export function playPianoNote(midi: number) {
     const hammer = (Math.random() * 2 - 1) * Math.exp(-time * 90) * 0.12;
     data[index] = (sample + hammer) * 0.22;
   }
+  return buffer;
+}
+
+function bufferFor(context: AudioContext, midi: number) {
+  let buffer = buffers.get(midi);
+  if (!buffer) {
+    buffer = synthesize(context, midi);
+    buffers.set(midi, buffer);
+  }
+  return buffer;
+}
+
+/** Works out these keys' sounds ahead, so playing them later starts on time. */
+export function preparePianoNotes(midis: number[]) {
+  const context = pianoContext();
+  if (!context) return;
+  for (const midi of midis) bufferFor(context, midi);
+}
+
+/**
+ * Plays a key now, or at `when` on the audio clock. Returns the sound so a
+ * scheduled note can be called off.
+ */
+export function playPianoNote(midi: number, when = 0) {
+  const context = pianoContext();
+  if (!context) return null;
 
   const source = context.createBufferSource();
-  source.buffer = buffer;
+  source.buffer = bufferFor(context, midi);
   source.connect(context.destination);
-  source.start();
+  source.start(when);
+  return source;
 }

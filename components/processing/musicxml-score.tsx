@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   GraphicalMeasure,
   GraphicalNote,
@@ -17,6 +17,13 @@ import {
 } from "@/lib/processing/annotation-style";
 import { noteName } from "@/lib/processing/solfege";
 import { useSettings } from "@/components/settings/settings-provider";
+import {
+  revealElement,
+  type Hand,
+  type LinkedMeasure,
+  type LinkedNote,
+  type ScoreLink,
+} from "@/components/piano/score-link";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const LABEL_LAYER_CLASS = "solfege-labels";
@@ -37,6 +44,10 @@ const LINE_HEIGHT = 1.2;
 const BELOW_GAP = 6;
 // Space between the two pages of a spread; matches .score-musicxml-spread.
 const SPREAD_GAP_PX = 20;
+// Clicks this close to a notehead, in pixels, still pick it.
+const TARGET_REACH_PX = 6;
+const MEASURE_PADDING_PX = 8;
+const FOCUS_PADDING_PX = 3;
 
 type MusicXmlScoreProps = {
   fileUrl: string;
@@ -47,6 +58,7 @@ type MusicXmlScoreProps = {
   generating?: boolean;
   /** Shows the score as pages, two side by side. */
   spread?: boolean;
+  link?: ScoreLink;
 };
 
 type LoadState = "loading" | "ready" | "error";
@@ -206,6 +218,152 @@ function drawLabels(osmd: OpenSheetMusicDisplay, style: AnnotationStyle) {
   }
 }
 
+type NoteTarget = { note: LinkedNote; measureId: string; head: SVGGraphicsElement };
+type StaveBox = {
+  measureId: string;
+  svg: SVGSVGElement;
+  x: number;
+  width: number;
+  top: number;
+  bottom: number;
+};
+type ScoreLinks = { measures: LinkedMeasure[]; targets: NoteTarget[]; staves: StaveBox[] };
+
+type Box = { left: number; top: number; width: number; height: number };
+type LinkGeometry = {
+  notes: Map<string, Box>;
+  measures: Map<string, Box>;
+  hands: Map<string, Hand>;
+};
+
+function handOf(measure: GraphicalMeasure): Hand {
+  const staff = measure.ParentStaff;
+  return staff.ParentInstrument.Staves.indexOf(staff) > 0 ? "left" : "right";
+}
+
+/** Groups each measure's notes by when they start, across all of its staves. */
+function collectLinks(osmd: OpenSheetMusicDisplay): ScoreLinks {
+  const links: ScoreLinks = { measures: [], targets: [], staves: [] };
+  osmd.GraphicSheet.MeasureList.forEach((measuresOfStaves, index) => {
+    const measureId = `m${index}`;
+    const steps = new Map<number, LinkedNote[]>();
+    let svg: SVGSVGElement | null = null;
+    let number = index + 1;
+
+    for (const measure of measuresOfStaves) {
+      if (!measure) continue;
+      if (measure.MeasureNumber > 0) number = measure.MeasureNumber;
+      const hand = handOf(measure);
+      for (const staffEntry of measure.staffEntries) {
+        const time = Math.round(staffEntry.relInMeasureTimestamp.RealValue * 1e6);
+        const notes = staffEntry.graphicalVoiceEntries.flatMap(
+          (voiceEntry) => voiceEntry.notes,
+        );
+        for (const note of notes) {
+          const source = note.sourceNote;
+          const pitch = source.Pitch;
+          if (source.isRest() || !pitch || !source.PrintObject) continue;
+          if (isTieContinuation(note)) continue;
+          const head = noteheadOf(note as VexFlowGraphicalNote);
+          if (!head?.ownerSVGElement) continue;
+          svg = head.ownerSVGElement;
+          const octave = pitch.Octave + OSMD_OCTAVE_OFFSET;
+          const linked: LinkedNote = {
+            id: `${measureId}-${links.targets.length}`,
+            midi:
+              (octave + 1) * 12 + pitch.FundamentalNote + pitch.AccidentalHalfTones,
+            hand,
+          };
+          links.targets.push({ note: linked, measureId, head });
+          const step = steps.get(time) ?? [];
+          step.push(linked);
+          steps.set(time, step);
+        }
+      }
+    }
+    if (!svg || steps.size === 0) return;
+
+    for (const measure of measuresOfStaves) {
+      const stave = (measure as VexFlowMeasure | undefined)?.getVFStave?.();
+      if (!stave) continue;
+      links.staves.push({
+        measureId,
+        svg,
+        x: stave.getX(),
+        width: stave.getWidth(),
+        top: stave.getYForLine(0),
+        bottom: stave.getYForLine(4),
+      });
+    }
+    links.measures.push({
+      id: measureId,
+      number,
+      steps: [...steps.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([, step]) => step),
+    });
+  });
+  return links;
+}
+
+function union(a: Box | undefined, b: Box): Box {
+  if (!a) return b;
+  const left = Math.min(a.left, b.left);
+  const top = Math.min(a.top, b.top);
+  return {
+    left,
+    top,
+    width: Math.max(a.left + a.width, b.left + b.width) - left,
+    height: Math.max(a.top + a.height, b.top + b.height) - top,
+  };
+}
+
+/** Where the notes and measures sit, in pixels from the top left of `origin`. */
+function measureGeometry(links: ScoreLinks, origin: HTMLElement): LinkGeometry {
+  const base = origin.getBoundingClientRect();
+  const notes = new Map<string, Box>();
+  const measures = new Map<string, Box>();
+  const hands = new Map<string, Hand>();
+
+  for (const target of links.targets) {
+    hands.set(target.note.id, target.note.hand);
+    const rect = target.head.getBoundingClientRect();
+    const box = {
+      left: rect.left - base.left,
+      top: rect.top - base.top,
+      width: rect.width,
+      height: rect.height,
+    };
+    notes.set(target.note.id, box);
+    measures.set(target.measureId, union(measures.get(target.measureId), box));
+  }
+  for (const stave of links.staves) {
+    const matrix = stave.svg.getScreenCTM();
+    if (!matrix) continue;
+    const start = new DOMPoint(stave.x, stave.top).matrixTransform(matrix);
+    const end = new DOMPoint(stave.x + stave.width, stave.bottom).matrixTransform(
+      matrix,
+    );
+    const box = {
+      left: start.x - base.left,
+      top: start.y - base.top,
+      width: end.x - start.x,
+      height: end.y - start.y,
+    };
+    measures.set(stave.measureId, union(measures.get(stave.measureId), box));
+  }
+  return { notes, measures, hands };
+}
+
+function padded(box: Box, padding: number) {
+  return {
+    left: box.left - padding,
+    top: box.top - padding,
+    width: box.width + 2 * padding,
+    height: box.height + 2 * padding,
+  };
+}
+
 function applyLayoutRules(
   osmd: OpenSheetMusicDisplay,
   base: BaseRules,
@@ -273,9 +431,18 @@ export function MusicXmlScore({
   labelStyle,
   generating = false,
   spread = false,
+  link,
 }: MusicXmlScoreProps) {
   const { t } = useSettings();
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const linksRef = useRef<ScoreLinks | null>(null);
+  const [geometry, setGeometry] = useState<LinkGeometry | null>(null);
+  const linked = Boolean(link);
+  const onMeasures = link?.onMeasures;
+  // Each drawing makes new noteheads, so the links are collected again.
+  const refreshLinksRef = useRef(() => {});
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
   const baseRulesRef = useRef<BaseRules>({
     voiceSpacing: 1,
@@ -328,6 +495,7 @@ export function MusicXmlScore({
         paint(osmd, target, baseRulesRef.current, settingsRef.current);
         osmdRef.current = osmd;
         setLoaded({ url: fileUrl, failed: false });
+        refreshLinksRef.current();
       } catch {
         if (cancelled) return;
         target.replaceChildren();
@@ -352,16 +520,96 @@ export function MusicXmlScore({
         labelStyle: visibleStyle,
         spread,
       });
+      refreshLinksRef.current();
     } catch (error) {
       console.error("Could not redraw the score.", error);
     }
   }, [zoom, visibleStyle, spread]);
+
+  const relayout = useCallback(() => {
+    const links = linksRef.current;
+    const wrapper = wrapperRef.current;
+    if (!links || !wrapper) return;
+    setGeometry(measureGeometry(links, wrapper));
+  }, []);
+
+  useEffect(() => {
+    refreshLinksRef.current = () => {
+      const osmd = osmdRef.current;
+      if (!linked || !osmd) return;
+      const links = collectLinks(osmd);
+      linksRef.current = links;
+      onMeasures?.(links.measures);
+      relayout();
+    };
+    refreshLinksRef.current();
+  }, [linked, onMeasures, relayout]);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!linked || !wrapper) return;
+    const resize = new ResizeObserver(relayout);
+    resize.observe(wrapper);
+    return () => resize.disconnect();
+  }, [linked, relayout]);
+
+  const selection = link?.selection;
+  const measureId = selection?.measureId ?? null;
+  useEffect(() => {
+    if (highlightRef.current) revealElement(highlightRef.current);
+  }, [measureId]);
+
+  /** The note nearest the pointer, if it is close enough to pick. */
+  function noteAt(event: React.MouseEvent<HTMLDivElement>) {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || !geometry) return null;
+    const base = wrapper.getBoundingClientRect();
+    const x = event.clientX - base.left;
+    const y = event.clientY - base.top;
+    let nearest: string | null = null;
+    let nearestDistance = TARGET_REACH_PX;
+    for (const [id, box] of geometry.notes) {
+      const dx = Math.max(box.left - x, 0, x - box.left - box.width);
+      const dy = Math.max(box.top - y, 0, y - box.top - box.height);
+      const distance = Math.hypot(dx, dy);
+      if (distance <= nearestDistance) {
+        nearest = id;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+
+  const measureBox = measureId ? geometry?.measures.get(measureId) : undefined;
+  const previewBox =
+    selection?.previewId && !selection.focusIds.includes(selection.previewId)
+      ? geometry?.notes.get(selection.previewId)
+      : undefined;
 
   return (
     <div
       className={
         spread ? "score-file score-musicxml score-musicxml-spread" : "score-file score-musicxml"
       }
+      data-note-hover={Boolean(selection?.previewId)}
+      onClick={
+        link
+          ? (event) => {
+              const id = noteAt(event);
+              if (id) link.onNoteClick(id);
+            }
+          : undefined
+      }
+      onPointerLeave={link ? () => link.onNoteHover(null) : undefined}
+      onPointerMove={
+        link
+          ? (event) => {
+              const id = noteAt(event);
+              if (id !== link.selection.previewId) link.onNoteHover(id);
+            }
+          : undefined
+      }
+      ref={wrapperRef}
     >
       {loadState === "loading" ? (
         <p className="score-musicxml-status">{t("score.loading")}</p>
@@ -372,6 +620,34 @@ export function MusicXmlScore({
         </p>
       ) : null}
       <div aria-label={title} ref={containerRef} role="img" />
+      {link && geometry ? (
+        <div aria-hidden="true" className="score-links">
+          {measureBox ? (
+            <div
+              className="score-measure-highlight"
+              ref={highlightRef}
+              style={padded(measureBox, MEASURE_PADDING_PX)}
+            />
+          ) : null}
+          {previewBox ? (
+            <div
+              className="score-note-preview"
+              style={padded(previewBox, FOCUS_PADDING_PX)}
+            />
+          ) : null}
+          {selection?.focusIds.map((id) => {
+            const box = geometry.notes.get(id);
+            return box ? (
+              <div
+                className="score-note-focus"
+                data-hand={geometry.hands.get(id)}
+                key={id}
+                style={padded(box, FOCUS_PADDING_PX)}
+              />
+            ) : null;
+          })}
+        </div>
+      ) : null}
       {generating && loadState === "ready" ? (
         <div className="score-generating" role="status">
           <span className="score-generating-badge">

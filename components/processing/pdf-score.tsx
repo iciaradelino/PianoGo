@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   labelColorValues,
   labelFontSizes,
@@ -11,6 +11,13 @@ import { STEP_SEMITONES } from "@/lib/processing/pdf/find-notes";
 import type { PdfNoteRecord } from "@/lib/processing/repository";
 import { noteName } from "@/lib/processing/solfege";
 import { useSettings } from "@/components/settings/settings-provider";
+import {
+  pdfMeasureId,
+  pdfMeasures,
+  revealElement,
+  type LinkedNote,
+  type ScoreLink,
+} from "@/components/piano/score-link";
 
 // Label sizes are in score units, where one staff space is 10.
 const SCORE_UNITS_PER_SPACE = 10;
@@ -24,6 +31,10 @@ const LINE_HEIGHT = 1.2;
 const RENDER_MARGIN = "1200px 0px";
 // Canvases sharper than this cost a lot of memory for little gain.
 const MAX_PIXEL_RATIO = 2;
+// Room around the notes of a highlighted measure, in staff spaces.
+const MEASURE_PADDING = 1;
+// Click targets reach this far past a notehead, in staff spaces.
+const TARGET_PADDING = 0.35;
 
 type PdfPageProxy = {
   getViewport: (options: { scale: number }) => { width: number; height: number };
@@ -51,6 +62,7 @@ type PdfScoreProps = {
   generatingMessage?: string;
   /** Shows the pages two by two, like an open book. */
   spread?: boolean;
+  link?: ScoreLink;
 };
 
 async function openPdf(fileUrl: string) {
@@ -144,12 +156,133 @@ function belowLabels(notes: PdfNoteRecord[], style: AnnotationStyle) {
   });
 }
 
+type PageNote = PdfNoteRecord & { id: string };
+
+/** Spans the staves of a measure, from its first note to its last. */
+function measureBox(notes: PageNote[]) {
+  const space = Math.max(...notes.map((note) => note.staffSpace));
+  const left = Math.min(...notes.map((note) => note.x));
+  const right = Math.max(...notes.map((note) => note.x + note.width));
+  const top = Math.min(
+    ...notes.map((note) => Math.min(note.staffBottom - 4 * note.staffSpace, note.y)),
+  );
+  const bottom = Math.max(
+    ...notes.map((note) => Math.max(note.staffBottom, note.y + note.height)),
+  );
+  const padding = space * MEASURE_PADDING;
+  return {
+    x: left - padding,
+    y: top - padding,
+    width: right - left + 2 * padding,
+    height: bottom - top + 2 * padding,
+    radius: space / 2,
+  };
+}
+
+function noteRing(note: PageNote, padding: number) {
+  const pad = note.staffSpace * padding;
+  return {
+    x: note.x - pad,
+    y: note.y - pad,
+    width: note.width + 2 * pad,
+    height: note.height + 2 * pad,
+  };
+}
+
+type TargetHandlers = Pick<ScoreLink, "onNoteClick" | "onNoteHover">;
+
+type NoteTargetsProps = TargetHandlers & { notes: PageNote[] };
+
+/** Every note on the page can be clicked; kept apart so playback does not redraw them. */
+const NoteTargets = memo(function NoteTargets({
+  notes,
+  onNoteClick,
+  onNoteHover,
+}: NoteTargetsProps) {
+  return notes.map((note) => (
+    <rect
+      className="score-note-target"
+      key={note.id}
+      onClick={() => onNoteClick(note.id)}
+      onPointerEnter={() => onNoteHover(note.id)}
+      onPointerLeave={() => onNoteHover(null)}
+      {...noteRing(note, TARGET_PADDING)}
+    />
+  ));
+});
+
+type PageLinksProps = {
+  notes: PageNote[];
+  size: PageSize;
+  link: ScoreLink;
+  targets: TargetHandlers;
+  linkedNotes: Map<string, LinkedNote>;
+};
+
+function PageLinks({ notes, size, link, targets, linkedNotes }: PageLinksProps) {
+  const highlightRef = useRef<SVGRectElement>(null);
+  const { measureId, focusIds, previewId } = link.selection;
+  const measureNotes = useMemo(
+    () => notes.filter((note) => pdfMeasureId(note) === measureId),
+    [notes, measureId],
+  );
+  const box = measureNotes.length > 0 ? measureBox(measureNotes) : null;
+  const focused = notes.filter((note) => focusIds.includes(note.id));
+  const preview = notes.find((note) => note.id === previewId);
+
+  useEffect(() => {
+    if (highlightRef.current) revealElement(highlightRef.current);
+  }, [measureId]);
+
+  return (
+    <svg className="pdf-page-links" viewBox={`0 0 ${size.width} ${size.height}`}>
+      {box ? (
+        <rect
+          className="score-measure-highlight"
+          height={box.height}
+          ref={highlightRef}
+          rx={box.radius}
+          width={box.width}
+          x={box.x}
+          y={box.y}
+        />
+      ) : null}
+      {preview && !focusIds.includes(preview.id) ? (
+        <rect
+          className="score-note-preview"
+          rx={preview.staffSpace / 2}
+          style={{ strokeWidth: preview.staffSpace * 0.15 }}
+          {...noteRing(preview, 0.3)}
+        />
+      ) : null}
+      {focused.map((note) => (
+        <rect
+          className="score-note-focus"
+          data-hand={linkedNotes.get(note.id)?.hand}
+          key={note.id}
+          rx={note.staffSpace / 2}
+          style={{ strokeWidth: note.staffSpace * 0.2 }}
+          {...noteRing(note, 0.3)}
+        />
+      ))}
+      <NoteTargets
+        notes={notes}
+        onNoteClick={targets.onNoteClick}
+        onNoteHover={targets.onNoteHover}
+      />
+    </svg>
+  );
+}
+
 type PdfPageViewProps = {
   document: PdfDocumentProxy;
   pageNumber: number;
   size: PageSize;
-  notes: PdfNoteRecord[];
+  notes: PageNote[];
   labelStyle: AnnotationStyle | null;
+  link?: ScoreLink;
+  targets: TargetHandlers;
+  linkedNotes: Map<string, LinkedNote>;
 };
 
 function PdfPageView({
@@ -158,6 +291,9 @@ function PdfPageView({
   size,
   notes,
   labelStyle,
+  link,
+  targets,
+  linkedNotes,
 }: PdfPageViewProps) {
   const pageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -240,6 +376,15 @@ function PdfPageView({
       style={{ aspectRatio: `${size.width} / ${size.height}` }}
     >
       <canvas className="pdf-page-canvas" ref={canvasRef} />
+      {link ? (
+        <PageLinks
+          link={link}
+          linkedNotes={linkedNotes}
+          notes={notes}
+          size={size}
+          targets={targets}
+        />
+      ) : null}
       {labelStyle && labels.length > 0 ? (
         <svg
           aria-hidden="true"
@@ -281,6 +426,7 @@ export function PdfScore({
   generating = false,
   generatingMessage,
   spread = false,
+  link,
 }: PdfScoreProps) {
   const { t } = useSettings();
   const [loaded, setLoaded] = useState<LoadState>();
@@ -314,14 +460,41 @@ export function PdfScore({
   }, [fileUrl]);
 
   const notesByPage = useMemo(() => {
-    const byPage = new Map<number, PdfNoteRecord[]>();
-    for (const note of notes) {
+    const byPage = new Map<number, PageNote[]>();
+    notes.forEach((note, index) => {
       const list = byPage.get(note.page) ?? [];
-      list.push(note);
+      list.push({ ...note, id: String(index) });
       byPage.set(note.page, list);
-    }
+    });
     return byPage;
   }, [notes]);
+
+  const measures = useMemo(() => pdfMeasures(notes), [notes]);
+  const linkedNotes = useMemo(
+    () =>
+      new Map(
+        measures.flatMap((measure) =>
+          measure.steps.flat().map((note) => [note.id, note] as const),
+        ),
+      ),
+    [measures],
+  );
+  const onMeasures = link?.onMeasures;
+  useEffect(() => {
+    onMeasures?.(measures);
+  }, [measures, onMeasures]);
+
+  // Handlers that never change, so the click targets are drawn once.
+  const linkRef = useRef(link);
+  useEffect(() => {
+    linkRef.current = link;
+  });
+  const onNoteClick = useCallback((id: string) => linkRef.current?.onNoteClick(id), []);
+  const onNoteHover = useCallback(
+    (id: string | null) => linkRef.current?.onNoteHover(id),
+    [],
+  );
+  const targets = useMemo(() => ({ onNoteClick, onNoteHover }), [onNoteClick, onNoteHover]);
 
   const visibleStyle = annotationsVisible ? labelStyle : null;
 
@@ -339,6 +512,9 @@ export function PdfScore({
               document={current.document}
               key={index}
               labelStyle={visibleStyle}
+              link={link}
+              linkedNotes={linkedNotes}
+              targets={targets}
               notes={notesByPage.get(index + 1) ?? []}
               pageNumber={index + 1}
               size={size}
