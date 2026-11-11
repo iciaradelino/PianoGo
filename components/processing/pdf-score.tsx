@@ -67,8 +67,10 @@ type PdfScoreProps = {
 
 async function openPdf(fileUrl: string) {
   const pdfjs = await import("pdfjs-dist");
+  // A relative path, not the package name: pdfjs-dist is a server external,
+  // and webpack would otherwise try to require() this ESM-only file.
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
+    "../../node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url,
   ).toString();
   const document = await pdfjs.getDocument({ url: fileUrl }).promise;
