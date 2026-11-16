@@ -34,14 +34,18 @@
     }
   },
   "dependencies": {
+    "@napi-rs/canvas": "1.0.9",
     "express": "5.3.0",
-    "mssql": "12.7.14"
+    "mssql": "12.7.14",
+    "multer": "2.5.0",
+    "pdfjs-dist": "4.10.38"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
     "@types/mssql": "12.3.0",
+    "@types/multer": "2.3.0",
     "@types/node": "24.19.2",
     "eslint": "10.14.0",
     "jest": "30.5.2",

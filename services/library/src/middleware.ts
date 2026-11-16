@@ -38,12 +38,21 @@ export const notFound: RequestHandler = (_req, res) => {
   res.status(404).json({ error: "Not found." });
 };
 
-/** Logs the error and answers 500 without sending the stack trace. */
+/**
+ * Answers a request body that could not be read (such as broken JSON) with
+ * its 4xx status, and anything else with 500, logging it without sending the
+ * stack trace.
+ */
 export function errorHandler(
   log: (line: string) => void = console.error,
 ): ErrorRequestHandler {
   return (error, req, res, next) => {
     if (res.headersSent) return next(error);
+    const status = (error as { status?: unknown } | null)?.status;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      res.status(status).json({ error: "The request could not be read." });
+      return;
+    }
     log(`${req.method} ${req.path} failed: ${error instanceof Error ? error.stack : error}`);
     res.status(500).json({ error: "Something went wrong." });
   };
