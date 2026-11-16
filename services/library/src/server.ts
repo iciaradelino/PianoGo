@@ -2,6 +2,9 @@ import path from "node:path";
 import { createApp } from "./app";
 import { SERVICE_NAME, loadConfig } from "./config";
 import { checkDatabase, connectDatabase } from "./db";
+import { createPreviewCache } from "./library/preview";
+import { createSheetRepository } from "./library/repository";
+import { sheetRoutes } from "./library/routes";
 import { migrate, readMigrations } from "./migrate";
 
 // Same place relative to this file in src/ (tests) and dist/ (the image).
@@ -14,7 +17,13 @@ async function main() {
   const pool = await connectDatabase(config.databaseUrl);
   await migrate(pool, readMigrations(migrationsDir));
 
-  const app = createApp({ config, checkDatabase: () => checkDatabase(pool) });
+  const sheets = createSheetRepository(pool);
+  const previews = createPreviewCache(sheets.readSheetFile);
+  const app = createApp({
+    config,
+    checkDatabase: () => checkDatabase(pool),
+    routes: sheetRoutes(sheets, previews),
+  });
   const server = app.listen(config.port, "0.0.0.0", () => {
     console.log(`${SERVICE_NAME} ${config.version} listening on port ${config.port}`);
   });

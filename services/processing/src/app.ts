@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Router } from "express";
 import { SERVICE_NAME, type Config } from "./config";
 import { cors, errorHandler, notFound, requestLog } from "./middleware";
 
@@ -7,9 +7,11 @@ export type AppDependencies = {
   /** True when this service can write to and read from its own database. */
   checkDatabase: () => Promise<boolean>;
   log?: (line: string) => void;
+  /** The domain's routes; left out by tests that only need /health. */
+  routes?: Router;
 };
 
-export function createApp({ config, checkDatabase, log }: AppDependencies) {
+export function createApp({ config, checkDatabase, log, routes }: AppDependencies) {
   const app = express();
   app.disable("x-powered-by");
   app.use(requestLog(log));
@@ -26,7 +28,7 @@ export function createApp({ config, checkDatabase, log }: AppDependencies) {
     });
   });
 
-  // The annotation routes are added here when lib/processing is ported.
+  if (routes) app.use(routes);
 
   app.use(notFound);
   app.use(errorHandler(log));
