@@ -1,0 +1,8 @@
+# Only package*.json, tsconfig*.json, src/ and migrations/ are copied into the
+# image; this keeps everything else out of the build context.
+node_modules
+dist
+coverage
+tests
+.env*
+*.md

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PianoGo status</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; color: #1f2937; }
+      li { margin: 0.4rem 0; }
+      .ok { color: #047857; }
+      .down { color: #b91c1c; }
+    </style>
+  </head>
+  <body>
+    <!-- Placeholder until the Next.js UI is exported here as static files.
+         It calls both services from the browser, which also checks CORS. -->
+    <h1>PianoGo</h1>
+    <ul id="status"><li>Checking the services…</li></ul>
+
+    <script src="config.js"></script>
+    <script>
+      const { libraryUrl, processingUrl } = window.PIANOGO_CONFIG;
+      const list = document.getElementById("status");
+      list.innerHTML = "";
+
+      async function check(name, url) {
+        const item = document.createElement("li");
+        list.append(item);
+        try {
+          const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
+          const body = await response.json();
+          item.className = response.ok ? "ok" : "down";
+          item.textContent = `${name}: ${body.status} (db ${body.db}, version ${body.version})`;
+        } catch {
+          item.className = "down";
+          item.textContent = `${name}: not reachable`;
+        }
+      }
+
+      check("library", libraryUrl);
+      check("processing", processingUrl);
+    </script>
+  </body>
+</html>
