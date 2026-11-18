@@ -1,0 +1,11 @@
+{
+  "mimeTypes": {
+    ".mjs": "text/javascript"
+  },
+  "routes": [
+    {
+      "route": "/config.js",
+      "headers": { "Cache-Control": "no-store" }
+    }
+  ]
+}
