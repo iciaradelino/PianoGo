@@ -1,0 +1,110 @@
+# The whole system on one machine: `docker compose up --build`.
+#
+#   ui          http://localhost:8080  static files served by stock nginx
+#   library     http://localhost:8001  sheets, files, previews
+#   processing  http://localhost:8002  annotations; calls library over HTTP
+#   sqlserver   localhost:1433         one database per service
+#
+# The passwords below are local-only defaults for a database that runs on your
+# machine and holds test data. They are not used anywhere else: Azure uses
+# different passwords, kept as GitHub secrets (README, ADR-8). To use your own,
+# put SA_PASSWORD, LIBRARY_DB_PASSWORD and PROCESSING_DB_PASSWORD in a .env
+# file next to this one (it is gitignored).
+
+name: pianogo
+
+x-sa-password: &sa-password ${SA_PASSWORD:-Local-only-sa-1}
+x-library-db-password: &library-db-password ${LIBRARY_DB_PASSWORD:-Local-only-library-1}
+x-processing-db-password: &processing-db-password ${PROCESSING_DB_PASSWORD:-Local-only-processing-1}
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: *sa-password
+    ports:
+      # Only on this machine, for running a single service outside Docker.
+      - "127.0.0.1:1433:1433"
+    volumes:
+      # Data survives `docker compose down`; only `down -v` deletes it.
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  # Runs db/init.sql once per `up` and exits: creates the two databases and
+  # one login per service. Uses the sqlcmd that ships in the same image.
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      SQLCMDPASSWORD: *sa-password
+      LIBRARY_DB_PASSWORD: *library-db-password
+      PROCESSING_DB_PASSWORD: *processing-db-password
+    volumes:
+      - ./db:/db:ro
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "sqlserver", "-U", "sa", "-b", "-i", "/db/init.sql"]
+    restart: "no"
+
+  library:
+    build:
+      context: ./services/library
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      PORT: "8001"
+      DATABASE_URL: "Server=sqlserver,1433;Database=pianogo_library;User Id=library_user;Password=${LIBRARY_DB_PASSWORD:-Local-only-library-1};Encrypt=true;TrustServerCertificate=true"
+      ALLOWED_ORIGIN: http://localhost:8080
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8001/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  processing:
+    build:
+      context: ./services/processing
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
+    # Deliberately not waiting for library: processing must start and serve
+    # its own data even when library is down (§3).
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      PORT: "8002"
+      DATABASE_URL: "Server=sqlserver,1433;Database=pianogo_processing;User Id=processing_user;Password=${PROCESSING_DB_PASSWORD:-Local-only-processing-1};Encrypt=true;TrustServerCertificate=true"
+      ALLOWED_ORIGIN: http://localhost:8080
+      LIBRARY_URL: http://library:8001
+      LIBRARY_TIMEOUT_S: "10"
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8002/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # The static UI, served as files by a stock image: not a service container.
+  ui:
+    image: nginx:1.29.3-alpine
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+
+volumes:
+  sqldata:
