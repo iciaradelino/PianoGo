@@ -1,6 +1,6 @@
 # The whole system on one machine: `docker compose up --build`.
 #
-#   ui          http://localhost:8080  static files served by stock nginx
+#   ui          http://localhost:8080  ui/ built to static files, served by stock nginx
 #   library     http://localhost:8001  sheets, files, previews
 #   processing  http://localhost:8002  annotations; calls library over HTTP
 #   sqlserver   localhost:1433         one database per service
@@ -98,13 +98,43 @@ services:
       retries: 3
       start_period: 30s
 
+  # Builds ui/ to static files once per `up` and exits. It copies the source
+  # out of the read-only mount first, so nothing is written into your checkout
+  # (and a Windows node_modules there is never used on Linux).
+  ui-build:
+    image: node:24.13.1-alpine3.23
+    working_dir: /build
+    volumes:
+      - ./ui:/src:ro
+      - ui-site:/site
+      - ui-npm-cache:/root/.npm
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+    command:
+      - sh
+      - -ec
+      - |
+        tar -C /src --exclude=./node_modules --exclude=./.next --exclude=./out -cf - . | tar -xf -
+        npm ci --no-audit --no-fund
+        npm run build
+        rm -rf /site/* && cp -r out/. /site/
+        echo "ui-build: static files are ready"
+    restart: "no"
+
   # The static UI, served as files by a stock image: not a service container.
+  # The files are the same ones deployed to Azure Static Web Apps.
   ui:
     image: nginx:1.29.3-alpine
+    depends_on:
+      ui-build:
+        condition: service_completed_successfully
     volumes:
-      - ./ui:/usr/share/nginx/html:ro
+      - ui-site:/usr/share/nginx/html:ro
+      - ./ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "8080:80"
 
 volumes:
   sqldata:
+  ui-site:
+  ui-npm-cache:
