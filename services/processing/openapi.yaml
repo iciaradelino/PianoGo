@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: PianoGo processing service
+  version: 1.0.0
+  description: |
+    Annotations: the note names read from a sheet, where they sit on the
+    page, and how they are drawn (ADR-6).
+
+    Called from the browser by the static UI. To annotate a sheet it calls
+    the library service, `GET {LIBRARY_URL}/sheets/{id}/file`, with a timeout
+    of `LIBRARY_TIMEOUT_S` seconds. Every other endpoint answers from this
+    service's own database, so it keeps working while the library is down.
+    Cross-origin requests are allowed only from the UI's origin
+    (`ALLOWED_ORIGIN`).
+
+    Every error response has the shape `{ "error": "<message for the user>" }`.
+servers:
+  - url: http://localhost:8002
+    description: Local (docker compose)
+tags:
+  - name: health
+  - name: annotations
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Whether this service and its own database are working
+      description: |
+        Writes to and reads back a row of the service's database. It reports
+        only this service: it stays 200 while the library is down.
+      responses:
+        "200":
+          description: The service and its database are working.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok, service: processing, db: ok, version: 3f2c1a9 }
+        "503":
+          description: The database cannot be reached.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: error, service: processing, db: error, version: 3f2c1a9 }
+
+  /annotations:
+    get:
+      tags: [annotations]
+      operationId: getAnnotation
+      summary: A sheet's annotation status and style
+      description: |
+        A sheet that was never annotated answers `status: none` with the
+        default style. It does not ask the library whether the sheet exists.
+      parameters:
+        - $ref: "#/components/parameters/SheetIdQuery"
+      responses:
+        "200":
+          description: The sheet's annotation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Annotation" }
+        "404": { $ref: "#/components/responses/InvalidSheetId" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [annotations]
+      operationId: generateAnnotations
+      summary: Read a sheet's notes (the call across the seam)
+      description: |
+        Fetches the sheet's file from the library, then:
+        - MusicXML: marks the annotation ready (the UI reads the notes from the file).
+        - PDF with text notation: finds the notes and stores them, then answers 201.
+        - Scanned PDF: starts Audiveris in the background and answers 202 with
+          `status: processing`; poll `GET /annotations` until it is `ready` or `failed`.
+
+        Running it again replaces the stored notes and keeps the style.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sheetId]
+              properties:
+                sheetId: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          description: The notes were read and stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Annotation" }
+        "202":
+          description: A scan is being read in the background.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Annotation" }
+        "400": { $ref: "#/components/responses/UnreadableBody" }
+        "404":
+          description: The library has no sheet with this id, or the id is not valid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: Sheet not found. }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503":
+          description: |
+            The library did not answer in time or answered with an error, or
+            the sheet is a scan and Audiveris is not installed on this server.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                libraryUnavailable:
+                  value:
+                    error: The library is not responding, so this sheet can't be annotated right now. Try again in a minute.
+                noReader:
+                  value:
+                    error: This looks like a scanned sheet. Reading scans needs Audiveris, which is not installed on this server.
+    patch:
+      tags: [annotations]
+      operationId: updateAnnotationStyle
+      summary: Change how a sheet's note names are drawn
+      description: Unknown or missing style fields keep their current value.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sheetId, style]
+              properties:
+                sheetId: { type: integer, minimum: 1 }
+                style: { $ref: "#/components/schemas/AnnotationStyleInput" }
+      responses:
+        "200":
+          description: The annotation with its new style.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Annotation" }
+        "400": { $ref: "#/components/responses/UnreadableBody" }
+        "404":
+          description: The sheet has no annotation yet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: Generate annotations for this sheet first. }
+        "500": { $ref: "#/components/responses/ServerError" }
+    delete:
+      tags: [annotations]
+      operationId: deleteAnnotations
+      summary: Delete a sheet's annotation and notes
+      description: |
+        Called by the UI after it deletes the sheet in the library. Answers
+        204 also when there was nothing to delete, so it can be retried.
+      parameters:
+        - $ref: "#/components/parameters/SheetIdQuery"
+      responses:
+        "204": { description: Nothing is stored for this sheet any more. }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /annotations/notes:
+    get:
+      tags: [annotations]
+      operationId: getPdfNotes
+      summary: The notes found on a PDF sheet, in reading order
+      description: Empty for MusicXML sheets, sheets not annotated yet, and invalid ids.
+      parameters:
+        - $ref: "#/components/parameters/SheetIdQuery"
+      responses:
+        "200":
+          description: The sheet's notes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notes]
+                properties:
+                  notes:
+                    type: array
+                    items: { $ref: "#/components/schemas/PdfNote" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+components:
+  parameters:
+    SheetIdQuery:
+      name: sheetId
+      in: query
+      required: true
+      description: The library's id of the sheet.
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    InvalidSheetId:
+      description: The sheet id is missing or not a positive integer.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: Sheet not found. }
+    UnreadableBody:
+      description: The body is not valid JSON.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: The request could not be read. }
+    ServerError:
+      description: An unexpected error, logged by the service without details in the response.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: Something went wrong. }
+
+  schemas:
+    Health:
+      type: object
+      required: [status, service, db, version]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        service: { type: string, const: processing }
+        db: { type: string, enum: [ok, error] }
+        version:
+          type: string
+          description: The git commit SHA the image was built from (`dev` locally).
+
+    Annotation:
+      type: object
+      required: [sheetId, status, style]
+      properties:
+        sheetId: { type: integer, minimum: 1 }
+        status:
+          type: string
+          enum: [none, processing, ready, failed]
+          description: |
+            `failed` also covers a scan that was still being read when the
+            service stopped (for example when it scaled to zero).
+        style: { $ref: "#/components/schemas/AnnotationStyle" }
+        progress:
+          type: object
+          description: Only while a scan is being read.
+          required: [sheet, sheets]
+          properties:
+            sheet: { type: integer, minimum: 1, description: The page being read. }
+            sheets: { type: integer, minimum: 1, description: Pages in the scan. }
+      example:
+        sheetId: 7
+        status: ready
+        style: { naming: solfege, size: medium, color: blue, letterCase: lower, position: beside, showOctave: false }
+
+    AnnotationStyle:
+      type: object
+      required: [naming, size, color, letterCase, position, showOctave]
+      properties:
+        naming: { type: string, enum: [solfege, letters], default: solfege }
+        size: { type: string, enum: [small, medium, large], default: medium }
+        color: { type: string, enum: [blue, red, green, purple, orange, black], default: blue }
+        letterCase: { type: string, enum: [lower, capitalized, upper], default: lower }
+        position: { type: string, enum: [beside, below], default: beside }
+        showOctave: { type: boolean, default: false }
+
+    AnnotationStyleInput:
+      description: Any subset of the style; other fields keep their value.
+      type: object
+      properties:
+        naming: { type: string, enum: [solfege, letters] }
+        size: { type: string, enum: [small, medium, large] }
+        color: { type: string, enum: [blue, red, green, purple, orange, black] }
+        letterCase: { type: string, enum: [lower, capitalized, upper] }
+        position: { type: string, enum: [beside, below] }
+        showOctave: { type: boolean }
+
+    PdfNote:
+      type: object
+      description: One note head, in PDF points from the page's top-left corner.
+      required: [page, x, y, width, height, staffSpace, staffBottom, step, alter, octave, measure, pianoKeyIndex]
+      properties:
+        page: { type: integer, minimum: 1 }
+        x: { type: number }
+        y: { type: number }
+        width: { type: number }
+        height: { type: number }
+        staffSpace: { type: number, description: Distance between two staff lines. }
+        staffBottom: { type: number, description: y of the staff's bottom line. }
+        step: { type: string, enum: [C, D, E, F, G, A, B] }
+        alter: { type: integer, description: Semitones from the natural note (♭ = -1). }
+        octave: { type: integer, description: Scientific pitch octave (middle C is C4). }
+        measure: { type: integer, minimum: 1 }
+        pianoKeyIndex: { type: integer, description: Key on an 88-key piano counted from A0 (0); C8 is 87. }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: A message meant to be shown to the user.
