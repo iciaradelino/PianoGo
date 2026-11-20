@@ -1,0 +1,168 @@
+# CI: runs on every push (except to main) and every pull request, and is
+# called by the CD workflow on main (workflow_call), so main is tested once,
+# by the same jobs, before anything is deployed.
+#
+# It never touches Azure: the tests use a throwaway SQL Server container whose
+# password is generated in the run, so no password is written in this file.
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  service:
+    name: ${{ matrix.service }} (lint, typecheck, tests, coverage)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [library, processing]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: npm
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      # Started first: SQL Server takes a while to boot, and npm ci and lint
+      # run in the meantime.
+      - name: Start a throwaway SQL Server
+        run: |
+          password="Ci-$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          echo "SQLCMDPASSWORD=$password" >> "$GITHUB_ENV"
+          echo "TEST_DATABASE_URL=Server=localhost,1433;Database=master;User Id=sa;Password=$password;Encrypt=true;TrustServerCertificate=true" >> "$GITHUB_ENV"
+          docker run -d --name sqlserver -p 1433:1433 \
+            -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$password" \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+      - name: Wait for SQL Server
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker exec -e SQLCMDPASSWORD sqlserver /opt/mssql-tools18/bin/sqlcmd \
+                 -C -S localhost -U sa -Q "SELECT 1" -b -o /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs sqlserver
+          exit 1
+
+      # Fails below 70% (statements, branches, functions, lines): the
+      # threshold is in package.json's jest config. With TEST_DATABASE_URL
+      # set, the repository tests run against the container, not skipped.
+      - name: Tests with coverage
+        run: npm run test:coverage
+
+  ui:
+    name: ui (lint, typecheck, static build)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  system-description:
+    name: system.yaml and OpenAPI documents
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+      - name: Validate system.yaml against system.schema.json
+        run: |
+          pip install check-jsonschema==0.38.2
+          check-jsonschema --schemafile system.schema.json system.yaml
+      - name: Validate each openapi.yaml against the OpenAPI specification
+        run: npx --yes @redocly/cli@1.34.24 lint --extends=minimal services/library/openapi.yaml services/processing/openapi.yaml
+
+  cross-seam:
+    name: cross-seam integration test (docker compose)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+      # The compose file's local-only passwords are enough for a stack that
+      # lives only inside this run.
+      - name: Start SQL Server and both services
+        run: docker compose up -d --build library processing
+        env:
+          GIT_SHA: ${{ github.sha }}
+      - name: Run the cross-seam test
+        run: node --test "tests/integration/*.test.mjs"
+      - name: Service logs
+        if: failure()
+        run: docker compose logs library processing db-init
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+
+  images:
+    name: ${{ matrix.service }} image
+    # Images are only pushed once everything above passed on this commit.
+    needs: [service, ui, system-description, cross-seam]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [library, processing]
+    env:
+      # Pushed only from main, which only the CD workflow runs CI for.
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pianogo-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: env.PUSH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          build-args: GIT_SHA=${{ github.sha }}
+          # Without this, the pushed tag points to a manifest list Azure
+          # Container Apps fails to pull (deployment guide, step 8).
+          provenance: false
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
