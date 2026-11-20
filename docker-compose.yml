@@ -122,7 +122,7 @@ services:
     restart: "no"
 
   # The static UI, served as files by a stock image: not a service container.
-  # The files are the same ones deployed to Azure Static Web Apps.
+  # The files are the same ones uploaded to the Azure Storage static website.
   ui:
     image: nginx:1.29.3-alpine
     depends_on:

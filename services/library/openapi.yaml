@@ -1,0 +1,273 @@
+openapi: 3.1.0
+info:
+  title: PianoGo library service
+  version: 1.0.0
+  description: |
+    Sheets, their uploaded files and their first-page previews (ADR-6).
+
+    Called from the browser by the static UI, and by the processing service,
+    which reads a sheet's file with `GET /sheets/{id}/file` before it
+    annotates it. Cross-origin requests are allowed only from the UI's origin
+    (`ALLOWED_ORIGIN`).
+
+    Every error response has the shape `{ "error": "<message for the user>" }`.
+servers:
+  - url: http://localhost:8001
+    description: Local (docker compose)
+tags:
+  - name: health
+  - name: sheets
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Whether this service and its own database are working
+      description: |
+        Writes to and reads back a row of the service's database. It reports
+        only this service; it never calls processing.
+      responses:
+        "200":
+          description: The service and its database are working.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok, service: library, db: ok, version: 3f2c1a9 }
+        "503":
+          description: The database cannot be reached.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: error, service: library, db: error, version: 3f2c1a9 }
+
+  /sheets:
+    get:
+      tags: [sheets]
+      operationId: listSheets
+      summary: List every sheet, newest first
+      responses:
+        "200":
+          description: All sheets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Sheet" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [sheets]
+      operationId: createSheet
+      summary: Upload a sheet
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title, difficulty, file]
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                  description: Trimmed; must not be empty.
+                composer:
+                  type: string
+                  maxLength: 200
+                  description: Trimmed; "Unknown" when empty or missing.
+                difficulty: { $ref: "#/components/schemas/Difficulty" }
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    A PDF (`.pdf`) or MusicXML (`.musicxml`, `.xml`, `.mxl`)
+                    file of at most 20 MB. The type is taken from the file
+                    name's extension.
+      responses:
+        "201":
+          description: The sheet was stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sheet" }
+        "400":
+          description: |
+            A field is missing or invalid, the file is not a PDF or MusicXML
+            file, or it is larger than 20 MB.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: Use a PDF or MusicXML file. }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /sheets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SheetId"
+    patch:
+      tags: [sheets]
+      operationId: updateSheet
+      summary: Change a sheet's details
+      description: The UI sends every field; a missing composer becomes "Unknown".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SheetDetails" }
+      responses:
+        "200":
+          description: The updated sheet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sheet" }
+        "400":
+          description: A field is invalid, or the body is not valid JSON.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: Add a title. }
+        "404": { $ref: "#/components/responses/SheetNotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    delete:
+      tags: [sheets]
+      operationId: deleteSheet
+      summary: Delete a sheet and its file
+      description: |
+        Does not touch the sheet's annotations, which belong to processing.
+        The UI asks processing to delete them afterwards (ADR-6).
+      responses:
+        "204": { description: The sheet was deleted. }
+        "404": { $ref: "#/components/responses/SheetNotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /sheets/{id}/file:
+    parameters:
+      - $ref: "#/components/parameters/SheetId"
+    get:
+      tags: [sheets]
+      operationId: getSheetFile
+      summary: The sheet's uploaded file
+      description: |
+        Shown by the UI, and called by processing (`LIBRARY_URL`) to read a
+        sheet's notes. Processing treats 404 as "sheet not found" and any
+        other failure or a timeout as "library unavailable".
+      responses:
+        "200":
+          description: The file as it was uploaded.
+          headers:
+            Content-Disposition:
+              description: '`inline` with the original file name.'
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+            application/xml:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/SheetNotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /sheets/{id}/preview:
+    parameters:
+      - $ref: "#/components/parameters/SheetId"
+    get:
+      tags: [sheets]
+      operationId: getSheetPreview
+      summary: A PNG of the first page of a PDF sheet
+      description: |
+        Rendered on first request and kept in memory. MusicXML sheets have no
+        preview here; the UI draws them itself.
+      responses:
+        "200":
+          description: The first page, 480 px wide.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: "private, max-age=86400" }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404":
+          description: The sheet does not exist or is not a PDF.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: Preview not available. }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+components:
+  parameters:
+    SheetId:
+      name: id
+      in: path
+      required: true
+      description: The sheet's id. Ids are never reused after a delete.
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    SheetNotFound:
+      description: No sheet has this id.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: Sheet not found. }
+    ServerError:
+      description: An unexpected error, logged by the service without details in the response.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: Something went wrong. }
+
+  schemas:
+    Health:
+      type: object
+      required: [status, service, db, version]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        service: { type: string, const: library }
+        db: { type: string, enum: [ok, error] }
+        version:
+          type: string
+          description: The git commit SHA the image was built from (`dev` locally).
+
+    Difficulty:
+      type: string
+      enum: [Beginner, Intermediate, Advanced]
+
+    PracticeStatus:
+      type: string
+      enum: [Not started, In progress, Completed]
+
+    Sheet:
+      type: object
+      required: [id, title, composer, difficulty, status, fileType]
+      properties:
+        id: { type: integer, minimum: 1 }
+        title: { type: string, maxLength: 200 }
+        composer: { type: string, maxLength: 200 }
+        difficulty: { $ref: "#/components/schemas/Difficulty" }
+        status: { $ref: "#/components/schemas/PracticeStatus" }
+        fileType: { type: string, enum: [pdf, musicxml] }
+      example:
+        id: 7
+        title: Canon in D
+        composer: Johann Pachelbel
+        difficulty: Beginner
+        status: Not started
+        fileType: pdf
+
+    SheetDetails:
+      type: object
+      required: [title, difficulty, status]
+      properties:
+        title: { type: string, maxLength: 200 }
+        composer:
+          type: string
+          maxLength: 200
+          description: '"Unknown" when empty or missing.'
+        difficulty: { $ref: "#/components/schemas/Difficulty" }
+        status: { $ref: "#/components/schemas/PracticeStatus" }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: A message meant to be shown to the user.
