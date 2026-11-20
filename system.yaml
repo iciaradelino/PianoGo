@@ -13,7 +13,7 @@ ui:
   storage_account: iadelinoieu2024ui
   calls: [library, processing]
 azure:
-  resource_group: iadelino-ieu2024-rg
+  resource_group: rg-iadelino-ieu2024
   container_apps_environment: iadelino-ieu2024-env
   sql_server: iadelino-ieu2024-sql
   registry: ghcr.io/iciaradelino
