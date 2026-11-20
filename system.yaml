@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=./system.schema.json
+#
+# Everything runs in my own Azure for Students subscription, in one resource
+# group of my own. todo: public_url is the storage website endpoint Azure
+# assigns when the account is created (its zone number, z6 here, is only
+# known then).
+student: iadelino.ieu2024
+prefix: iadelino-ieu2024
+public_url: https://iadelinoieu2024ui.z6.web.core.windows.net
+ui:
+  path: ui
+  # The UI is an Azure Storage static website: the prefix without hyphens + "ui".
+  storage_account: iadelinoieu2024ui
+  calls: [library, processing]
+azure:
+  resource_group: iadelino-ieu2024-rg
+  container_apps_environment: iadelino-ieu2024-env
+  sql_server: iadelino-ieu2024-sql
+  registry: ghcr.io/iciaradelino
+services:
+  library:
+    description: Sheets, their uploaded files and first-page previews.
+    path: services/library
+    openapi: services/library/openapi.yaml
+    port_default: 8001
+    health: /health
+    migrations: services/library/migrations
+    env:
+      PORT: { default: 8001, description: "Port the service listens on" }
+      DATABASE_URL: { secret: true, description: "Connection string of the library database, with the library login" }
+      ALLOWED_ORIGIN: { default: "http://localhost:8080", description: "The UI's origin, the only one allowed by CORS" }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, reported by /health; set at build time" }
+    # The library never calls processing (ADR-6).
+    calls: []
+    azure:
+      container_app: iadelino-ieu2024-library
+      sql_database: iadelino-ieu2024-library-db
+  processing:
+    description: Annotations of a sheet's notes, their positions on the page and their style.
+    path: services/processing
+    openapi: services/processing/openapi.yaml
+    port_default: 8002
+    health: /health
+    migrations: services/processing/migrations
+    env:
+      PORT: { default: 8002, description: "Port the service listens on" }
+      DATABASE_URL: { secret: true, description: "Connection string of the processing database, with the processing login" }
+      ALLOWED_ORIGIN: { default: "http://localhost:8080", description: "The UI's origin, the only one allowed by CORS" }
+      GIT_SHA: { default: dev, description: "Commit the image was built from, reported by /health; set at build time" }
+      LIBRARY_URL: { default: "http://library:8001", description: "Base URL of the library service" }
+      LIBRARY_TIMEOUT_S: { default: 10, description: "Timeout for calls to library" }
+      AUDIVERIS_PATH: { default: "", description: "Launcher of Audiveris, for reading scanned PDFs; not installed in the image, so scans answer 503 (ADR-10)" }
+    calls:
+      - service: library
+        url_env: LIBRARY_URL
+        endpoints: ["GET /sheets/{id}/file"]
+        timeout_s: 10
+        on_failure: >-
+          POST /annotations answers 503 and the UI shows "The library is not
+          responding, so this sheet can't be annotated right now. Try again in
+          a minute." A 404 from library becomes 404 "Sheet not found." Existing
+          annotations, notes and styles keep being served from processing's
+          own database.
+    azure:
+      container_app: iadelino-ieu2024-processing
+      sql_database: iadelino-ieu2024-processing-db
