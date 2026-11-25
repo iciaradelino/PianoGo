@@ -1,12 +1,11 @@
 # yaml-language-server: $schema=./system.schema.json
 #
 # Everything runs in my own Azure for Students subscription, in one resource
-# group of my own. todo: public_url is the storage website endpoint Azure
-# assigns when the account is created (its zone number, z6 here, is only
-# known then).
+# group created by infra/setup-azure.sh. public_url is the storage account's
+# static website endpoint.
 student: iadelino.ieu2024
 prefix: iadelino-ieu2024
-public_url: https://iadelinoieu2024ui.z6.web.core.windows.net
+public_url: https://iadelinoieu2024ui.z28.web.core.windows.net
 ui:
   path: ui
   # The UI is an Azure Storage static website: the prefix without hyphens + "ui".

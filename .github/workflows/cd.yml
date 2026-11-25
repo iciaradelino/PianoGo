@@ -1,0 +1,136 @@
+# CD: on every push to main, run CI (which also pushes the SHA-tagged images
+# to GHCR), then deploy that commit to Azure. Nothing is deployed unless CI
+# passed on the same commit.
+#
+# Signs in to Azure with OIDC as the managed identity created by
+# infra/setup-azure.sh: no Azure password or key is stored in GitHub.
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits instead of cancelling a deploy
+# halfway through.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PREFIX: ${{ vars.PREFIX }}
+      RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+      UI_STORAGE: ${{ vars.UI_STORAGE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Addresses of the UI and of both services
+        run: |
+          ui_origin=$(az storage account show --name "$UI_STORAGE" --resource-group "$RESOURCE_GROUP" --query primaryEndpoints.web -o tsv)
+          echo "UI_ORIGIN=${ui_origin%/}" >> "$GITHUB_ENV"
+          for service in library processing; do
+            fqdn=$(az containerapp show --name "$PREFIX-$service" --resource-group "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn -o tsv)
+            echo "${service^^}_URL=https://$fqdn" >> "$GITHUB_ENV"
+          done
+
+      # The connection strings are rebuilt from the GitHub secrets on every
+      # deploy, so rotating a password means updating its secret (and the
+      # database user), nothing else.
+      - name: Deploy both services
+        env:
+          LIBRARY_DB_PASSWORD: ${{ secrets.LIBRARY_DB_PASSWORD }}
+          PROCESSING_DB_PASSWORD: ${{ secrets.PROCESSING_DB_PASSWORD }}
+        run: |
+          owner=${GITHUB_REPOSITORY_OWNER,,}
+          for service in library processing; do
+            app=$PREFIX-$service
+            password_var=${service^^}_DB_PASSWORD
+            database_url="Server=$PREFIX-sql.database.windows.net,1433;Database=$PREFIX-$service-db;User Id=${service}_user;Password=${!password_var};Encrypt=true;TrustServerCertificate=false"
+            env_vars=(ALLOWED_ORIGIN="$UI_ORIGIN")
+            if [[ $service == processing ]]; then
+              env_vars+=(LIBRARY_URL="$LIBRARY_URL" LIBRARY_TIMEOUT_S=10)
+            fi
+            az containerapp secret set --name "$app" --resource-group "$RESOURCE_GROUP" \
+              --secrets database-url="$database_url" --output none
+            az containerapp update --name "$app" --resource-group "$RESOURCE_GROUP" \
+              --image "ghcr.io/$owner/pianogo-$service:$GITHUB_SHA" \
+              --set-env-vars "${env_vars[@]}" --output none
+            echo "$app now runs pianogo-$service:$GITHUB_SHA"
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.1
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build the UI with the services' addresses
+        working-directory: ui
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          npm ci
+          npm run build
+          cat > out/config.js <<EOF
+          // Written by the CD workflow for commit $GITHUB_SHA.
+          window.PIANOGO_CONFIG = {
+            libraryUrl: "$LIBRARY_URL",
+            processingUrl: "$PROCESSING_URL",
+          };
+          EOF
+          cat out/config.js
+
+      # A storage website serves each file with the content type it was
+      # uploaded with, so the two that matter are set explicitly (as
+      # ui/nginx.conf does locally).
+      - name: Upload the UI to the static website
+        run: |
+          key=$(az storage account keys list --account-name "$UI_STORAGE" --resource-group "$RESOURCE_GROUP" --query "[0].value" -o tsv)
+          echo "::add-mask::$key"
+          upload() { az storage blob upload-batch --account-name "$UI_STORAGE" --account-key "$key" \
+            --destination '$web' --overwrite --only-show-errors --output none "$@"; }
+          upload --source ui/out
+          upload --source ui/out --pattern "*.mjs" --content-type text/javascript
+          upload --source ui/out --pattern config.js --content-type application/javascript --content-cache-control no-store
+          echo "UI: $UI_ORIGIN"
+
+      # The first request after idle may start a container and resume a
+      # paused database, which takes about a minute: retry for 5 minutes.
+      - name: Health check
+        run: |
+          # Healthy is not enough: until the new revision takes over, the old
+          # one may still answer, so wait until /health reports this commit.
+          for url in "$LIBRARY_URL" "$PROCESSING_URL"; do
+            deadline=$((SECONDS + 300))
+            until body=$(curl -fsS --max-time 60 "$url/health") && [[ $body == *"\"version\":\"$GITHUB_SHA\""* ]]; do
+              if (( SECONDS > deadline )); then
+                echo "::error::$url/health did not return 200 for $GITHUB_SHA within 5 minutes (last answer: ${body:-none})"
+                exit 1
+              fi
+              echo "$url/health not ready yet (${body:-no answer}), retrying"
+              sleep 10
+            done
+            echo "$url/health: $body"
+          done
