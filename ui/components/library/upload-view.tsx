@@ -9,7 +9,7 @@ import {
   type Difficulty,
   type FileType,
 } from "@/lib/library/model";
-import { libraryUrl } from "@/lib/api";
+import { libraryUrl, serviceFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -128,7 +128,7 @@ export function UploadView({ onUploaded, onOpenLibrary }: UploadViewProps) {
     setNotice("");
 
     try {
-      const response = await fetch(libraryUrl("/sheets"), { method: "POST", body });
+      const response = await serviceFetch(libraryUrl("/sheets"), { method: "POST", body });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
         setError(payload.error ?? t("upload.failed"));

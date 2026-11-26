@@ -10,7 +10,7 @@ import {
   parseAnnotationStyle,
   type AnnotationStyle,
 } from "@/lib/processing/annotation-style";
-import { processingUrl, sheetFileUrl, type PdfNoteRecord } from "@/lib/api";
+import { processingUrl, serviceFetch, sheetFileUrl, type PdfNoteRecord } from "@/lib/api";
 import type { ScoreLink } from "./score-link";
 
 // pdf.js only runs in the browser.
@@ -30,12 +30,12 @@ type Annotations = {
 };
 
 async function loadAnnotations(sheet: Sheet): Promise<Annotations> {
-  const response = await fetch(processingUrl(`/annotations?sheetId=${sheet.id}`));
+  const response = await serviceFetch(processingUrl(`/annotations?sheetId=${sheet.id}`));
   const payload = (await response.json()) as { status?: string; style?: unknown };
   const ready = response.ok && payload.status === "ready";
   let notes: PdfNoteRecord[] = [];
   if (ready && sheet.fileType === "pdf") {
-    const notesResponse = await fetch(processingUrl(`/annotations/notes?sheetId=${sheet.id}`));
+    const notesResponse = await serviceFetch(processingUrl(`/annotations/notes?sheetId=${sheet.id}`));
     if (notesResponse.ok) {
       notes = ((await notesResponse.json()) as { notes?: PdfNoteRecord[] }).notes ?? [];
     }
