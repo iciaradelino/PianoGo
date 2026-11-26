@@ -102,10 +102,19 @@ export function AppShell() {
         <div className="brand">
           <Image
             alt=""
-            className="brand-logo"
+            className="brand-logo brand-logo-light"
             height={32}
             priority
             src="/pianogo-logo.svg?v=2"
+            unoptimized
+            width={32}
+          />
+          <Image
+            alt=""
+            className="brand-logo brand-logo-dark"
+            height={32}
+            priority
+            src="/pianogo-logo-white.svg"
             unoptimized
             width={32}
           />
