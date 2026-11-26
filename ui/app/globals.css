@@ -134,6 +134,15 @@ button {
   object-fit: cover;
 }
 
+.brand-logo-dark,
+.dark .brand-logo-light {
+  display: none;
+}
+
+.dark .brand-logo-dark {
+  display: block;
+}
+
 .brand-name {
   overflow: hidden;
   font-size: 0.875rem;
