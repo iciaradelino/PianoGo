@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { libraryUrl, serviceFetch } from "@/lib/api";
+import { libraryUrl } from "@/lib/api";
 import type { Sheet } from "@/lib/library/model";
 import { LibraryView } from "./library/library-view";
 import { SheetDetailView } from "./library/sheet-detail-view";
@@ -33,7 +33,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "./ui/tabs";
-import { WakingNotice } from "./waking-notice";
 
 const navigation = [
   { value: "library", label: "nav.library", icon: Library },
@@ -70,7 +69,7 @@ export function AppShell() {
   const loadSheets = useCallback(() => {
     const version = ++loadVersion.current;
 
-    serviceFetch(libraryUrl("/sheets"))
+    fetch(libraryUrl("/sheets"))
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load sheets.");
         return (await response.json()) as Sheet[];
@@ -221,7 +220,6 @@ export function AppShell() {
               )}
             </BreadcrumbList>
           </Breadcrumb>
-          <WakingNotice />
         </header>
 
         <main className="workspace">
