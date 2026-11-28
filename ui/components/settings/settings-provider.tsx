@@ -19,9 +19,11 @@ import {
   languageKey,
   readLanguage,
   readTheme,
+  readWelcomed,
   savePreference,
   subscribePreferences,
   themeKey,
+  welcomedKey,
   type Language,
   type Theme,
 } from "@/lib/settings/preferences";
@@ -29,8 +31,10 @@ import {
 type SettingsContextValue = {
   language: Language;
   theme: Theme;
+  welcomed: boolean;
   setLanguage: (language: Language) => void;
   setTheme: (theme: Theme) => void;
+  setWelcomed: (welcomed: boolean) => void;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
 };
 
@@ -48,6 +52,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     readTheme,
     () => defaultTheme,
   );
+
+  // The server renders the welcome screen; the theme script hides it before
+  // paint for returning visitors, and this switches to the saved choice.
+  const welcomed = useSyncExternalStore(
+    subscribePreferences,
+    readWelcomed,
+    () => false,
+  );
+
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-welcomed", welcomed);
+  }, [welcomed]);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -74,11 +90,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     () => ({
       language,
       theme,
+      welcomed,
       setLanguage: (next: Language) => savePreference(languageKey, next),
       setTheme: (next: Theme) => savePreference(themeKey, next),
+      setWelcomed: (next: boolean) =>
+        savePreference(welcomedKey, String(next)),
       t,
     }),
-    [language, theme, t],
+    [language, theme, welcomed, t],
   );
 
   return (

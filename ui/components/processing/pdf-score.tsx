@@ -64,7 +64,8 @@ type PdfScoreProps = {
   link?: ScoreLink;
 };
 
-async function openPdf(fileUrl: string) {
+/** Loads pdf.js with its worker set up. Also used by the upload preview. */
+export async function loadPdfjs() {
   const pdfjs = await import("pdfjs-dist");
   // A relative path, not the package name, so the bundler copies the worker
   // file into the build as a plain asset instead of trying to bundle it.
@@ -72,6 +73,11 @@ async function openPdf(fileUrl: string) {
     "../../node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url,
   ).toString();
+  return pdfjs;
+}
+
+async function openPdf(fileUrl: string) {
+  const pdfjs = await loadPdfjs();
   const document = await pdfjs.getDocument({ url: fileUrl }).promise;
   return document as unknown as PdfDocumentProxy;
 }

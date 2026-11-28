@@ -11,12 +11,25 @@ const cache = new Map<string, Promise<string | null>>();
 let queue: Promise<unknown> = Promise.resolve();
 
 async function renderPreview(fileUrl: string, title: string) {
-  const [{ OpenSheetMusicDisplay }, response] = await Promise.all([
-    import("opensheetmusicdisplay"),
-    serviceFetch(fileUrl),
-  ]);
+  const response = await serviceFetch(fileUrl);
   if (!response.ok) return null;
-  const file = await response.blob();
+  return renderMusicXmlFile(await response.blob(), title);
+}
+
+/**
+ * Renders the opening measures of a MusicXML file the browser already has,
+ * such as one picked for upload. Runs in the same queue as the grid.
+ */
+export function musicXmlFilePreview(file: Blob, title: string) {
+  const job = queue
+    .then(() => renderMusicXmlFile(file, title))
+    .catch(() => null);
+  queue = job;
+  return job;
+}
+
+async function renderMusicXmlFile(file: Blob, title: string) {
+  const { OpenSheetMusicDisplay } = await import("opensheetmusicdisplay");
 
   // OSMD lays out against the container width, so it must be in the document.
   const host = document.createElement("div");
