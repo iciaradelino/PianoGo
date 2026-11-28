@@ -112,6 +112,22 @@ describeWithDatabase("sheet repository", () => {
       expect(await sheets.listSheets()).toEqual([updated]);
     });
 
+    it("records when the sheet last changed", async () => {
+      const sheet = await upload();
+      const times = () =>
+        database
+          .pool()
+          .request()
+          .input("id", sheet.id)
+          .query(`SELECT created_at, updated_at FROM sheets WHERE id = @id`);
+      const created = (await times()).recordset[0];
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await sheets.updateSheet(sheet.id, details);
+      const edited = (await times()).recordset[0];
+      expect(edited.updated_at.getTime()).toBeGreaterThan(created.created_at.getTime());
+    });
+
     it("returns null for a sheet that does not exist", async () => {
       expect(await sheets.updateSheet(-1, details)).toBeNull();
       expect(await sheets.updateSheet(999999, details)).toBeNull();

@@ -55,6 +55,61 @@ describeWithDatabase("with SQL Server", () => {
     await expect(checkDatabase(pool)).resolves.toBe(true);
   });
 
+  it("002 keeps the sheets that 001's table already holds", async () => {
+    // A database of its own, migrated only to 001 and filled with sheets, as
+    // the deployed databases were before 002 shipped.
+    const name = `${databaseName}_002`;
+    await admin.request().batch(`CREATE DATABASE [${name}]`);
+    const config = sql.ConnectionPool.parseConnectionString(serverUrl!);
+    const old = await new sql.ConnectionPool({ ...config, database: name }).connect();
+    try {
+      await migrate(old, migrations.slice(0, 1), silent);
+      await old.request().batch(
+        `INSERT INTO sheets (title, composer, difficulty, original_filename, file_type,
+                             file_bytes, practice_status, created_at)
+         VALUES (N'Für Elise', N'Beethoven', N'Intermediate', N'elise.pdf', N'pdf',
+                 0x255044462D, N'In progress', '2026-10-01T09:30:00'),
+                (N'Waltz', N'Me', N'Beginner', N'waltz.musicxml', N'musicxml',
+                 0x3C73636F72652F3E, N'Not started', '2026-10-02T18:00:00');`,
+      );
+      const columns = `id, title, composer, difficulty, original_filename, file_type,
+                       file_bytes, practice_status, created_at`;
+      const before = (await old.request().query(`SELECT ${columns} FROM sheets ORDER BY id`))
+        .recordset;
+
+      const lines: string[] = [];
+      await migrate(old, migrations.slice(0, 2), (line) => lines.push(line));
+      expect(lines).toEqual(["migration applied: 002_add_sheet_updated_at.sql"]);
+
+      const after = await old
+        .request()
+        .query(`SELECT ${columns}, updated_at FROM sheets ORDER BY id`);
+      // Every column 001 made is unchanged, and updated_at is the backfill.
+      for (const [i, row] of after.recordset.entries()) {
+        const { updated_at: updatedAt, ...rest } = row;
+        expect(rest).toEqual(before[i]);
+        expect(updatedAt).toEqual(row.created_at);
+      }
+      expect(after.recordset).toHaveLength(before.length);
+
+      const nullable = await old
+        .request()
+        .query(
+          `SELECT is_nullable FROM sys.columns
+           WHERE object_id = OBJECT_ID(N'sheets') AND name = N'updated_at'`,
+        );
+      expect(nullable.recordset[0].is_nullable).toBe(false);
+    } finally {
+      await old.close();
+      await admin
+        .request()
+        .batch(
+          `ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+           DROP DATABASE [${name}];`,
+        );
+    }
+  }, 60000);
+
   it("rolls back a failing migration completely", async () => {
     const broken: Migration = {
       version: "999",
