@@ -1,6 +1,7 @@
 "use client";
 
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sparkles, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { languageNames } from "@/lib/settings/messages";
 import {
   languages,
@@ -22,7 +23,11 @@ const themeOptions = [
   { value: "system", label: "settings.system", icon: Monitor },
 ] as const;
 
-export function SettingsView() {
+type SettingsViewProps = {
+  onShowWelcome: () => void;
+};
+
+export function SettingsView({ onShowWelcome }: SettingsViewProps) {
   const { language, theme, setLanguage, setTheme, t } = useSettings();
 
   return (
@@ -73,6 +78,21 @@ export function SettingsView() {
             </SelectContent>
           </Select>
           <p className="settings-hint">{t("settings.languageHint")}</p>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h2>{t("settings.welcome")}</h2>
+        <div className="sheet-field">
+          <Button
+            className="settings-welcome-button"
+            onClick={onShowWelcome}
+            variant="outline"
+          >
+            <Sparkles aria-hidden="true" data-icon="inline-start" />
+            {t("settings.showWelcome")}
+          </Button>
+          <p className="settings-hint">{t("settings.welcomeHint")}</p>
         </div>
       </div>
     </section>

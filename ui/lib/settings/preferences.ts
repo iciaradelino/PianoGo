@@ -9,6 +9,7 @@ export const defaultTheme: Theme = "system";
 
 export const languageKey = "pianogo.language";
 export const themeKey = "pianogo.theme";
+export const welcomedKey = "pianogo.welcomed";
 
 const changeEvent = "pianogo:preferences";
 
@@ -36,6 +37,11 @@ export function readTheme(): Theme {
   return pick(themes, read(themeKey), defaultTheme);
 }
 
+/** True once the visitor has finished or skipped the welcome screen. */
+export function readWelcomed(): boolean {
+  return read(welcomedKey) === "true";
+}
+
 export function savePreference(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);
@@ -56,13 +62,16 @@ export function subscribePreferences(onChange: () => void) {
 }
 
 /**
- * Runs before the page paints so a dark theme never flashes light.
- * Kept in sync with `themeKey` and the `.dark` class in globals.css.
+ * Runs before the page paints so a dark theme never flashes light, and so a
+ * returning visitor never sees the welcome screen flash.
+ * Kept in sync with `themeKey`, `welcomedKey`, and the `.dark` class and
+ * `[data-welcomed]` rule in globals.css.
  */
 export const themeScript = `(() => {
   try {
     const theme = localStorage.getItem(${JSON.stringify(themeKey)});
     const dark = theme === "dark" || (theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.toggleAttribute("data-welcomed", localStorage.getItem(${JSON.stringify(welcomedKey)}) === "true");
   } catch {}
 })();`;
