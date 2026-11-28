@@ -1,6 +1,8 @@
 // Renders the opening measures of a MusicXML file to an SVG data URL so the
 // library grid can show it like the server-rendered PDF previews.
 
+import { serviceFetch } from "@/lib/api";
+
 const RENDER_WIDTH = 720;
 const PREVIEW_MEASURES = 8;
 
@@ -11,7 +13,7 @@ let queue: Promise<unknown> = Promise.resolve();
 async function renderPreview(fileUrl: string, title: string) {
   const [{ OpenSheetMusicDisplay }, response] = await Promise.all([
     import("opensheetmusicdisplay"),
-    fetch(fileUrl),
+    serviceFetch(fileUrl),
   ]);
   if (!response.ok) return null;
   const file = await response.blob();

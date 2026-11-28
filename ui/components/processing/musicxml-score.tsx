@@ -15,6 +15,7 @@ import {
   type AnnotationStyle,
   type LabelSize,
 } from "@/lib/processing/annotation-style";
+import { serviceFetch } from "@/lib/api";
 import { noteName } from "@/lib/processing/solfege";
 import { useSettings } from "@/components/settings/settings-provider";
 import {
@@ -472,7 +473,7 @@ export function MusicXmlScore({
       try {
         const [{ OpenSheetMusicDisplay }, response] = await Promise.all([
           import("opensheetmusicdisplay"),
-          fetch(fileUrl),
+          serviceFetch(fileUrl),
         ]);
         if (!response.ok) throw new Error("Could not fetch the score.");
         const file = await response.blob();

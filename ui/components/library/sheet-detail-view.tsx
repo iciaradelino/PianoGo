@@ -42,7 +42,7 @@ import {
   parseAnnotationStyle,
   type AnnotationStyle,
 } from "@/lib/processing/annotation-style";
-import { libraryUrl, processingUrl, sheetFileUrl, type PdfNoteRecord } from "@/lib/api";
+import { libraryUrl, processingUrl, serviceFetch, sheetFileUrl, type PdfNoteRecord } from "@/lib/api";
 
 // pdf.js only runs in the browser.
 const PdfScore = dynamic(
@@ -91,7 +91,7 @@ function delay(ms: number) {
 }
 
 async function fetchPdfNotes(sheetId: number) {
-  const response = await fetch(processingUrl(`/annotations/notes?sheetId=${sheetId}`));
+  const response = await serviceFetch(processingUrl(`/annotations/notes?sheetId=${sheetId}`));
   if (!response.ok) throw new Error("Could not load the annotations.");
   const payload = (await response.json()) as { notes?: PdfNoteRecord[] };
   return payload.notes ?? [];
@@ -156,7 +156,7 @@ export function SheetDetailView({
 
     async function loadAnnotationStatus() {
       try {
-        const response = await fetch(processingUrl(`/annotations?sheetId=${sheet.id}`));
+        const response = await serviceFetch(processingUrl(`/annotations?sheetId=${sheet.id}`));
         const payload = (await response.json()) as AnnotationPayload;
         if (cancelled) return;
         const style = parseAnnotationStyle(payload.style);
@@ -194,7 +194,7 @@ export function SheetDetailView({
 
     const timer = window.setInterval(async () => {
       try {
-        const response = await fetch(processingUrl(`/annotations?sheetId=${sheetId}`));
+        const response = await serviceFetch(processingUrl(`/annotations?sheetId=${sheetId}`));
         const payload = (await response.json()) as AnnotationPayload;
         if (cancelled || !response.ok) return;
         if (payload.status === "processing") {
@@ -227,7 +227,7 @@ export function SheetDetailView({
     setError("");
     try {
       const [response] = await Promise.all([
-        fetch(processingUrl("/annotations"), {
+        serviceFetch(processingUrl("/annotations"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sheetId }),
@@ -270,7 +270,7 @@ export function SheetDetailView({
     setAnnotationsVisible(true);
     setError("");
     try {
-      const response = await fetch(processingUrl("/annotations"), {
+      const response = await serviceFetch(processingUrl("/annotations"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sheetId, style: next }),
@@ -296,7 +296,7 @@ export function SheetDetailView({
     setSaving(true);
     setError("");
     try {
-      const response = await fetch(libraryUrl(`/sheets/${sheet.id}`), {
+      const response = await serviceFetch(libraryUrl(`/sheets/${sheet.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
@@ -342,7 +342,7 @@ export function SheetDetailView({
     setSaving(true);
     setError("");
     try {
-      const response = await fetch(libraryUrl(`/sheets/${sheet.id}`), {
+      const response = await serviceFetch(libraryUrl(`/sheets/${sheet.id}`), {
         method: "DELETE",
       });
       if (!response.ok) {
@@ -353,7 +353,7 @@ export function SheetDetailView({
       // cleaned up on a best-effort basis: if processing is down they stay
       // behind as orphans, which nothing reads, since sheet ids are never
       // reused (ADR-6).
-      fetch(processingUrl(`/annotations?sheetId=${sheet.id}`), {
+      serviceFetch(processingUrl(`/annotations?sheetId=${sheet.id}`), {
         method: "DELETE",
       }).catch(() => undefined);
       onDelete(sheet.id);

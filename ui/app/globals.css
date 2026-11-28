@@ -266,6 +266,37 @@ button {
   padding: 0 1.25rem;
 }
 
+.waking-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  background: var(--app-subtle);
+  color: var(--app-text-muted);
+  font-size: 0.8125rem;
+}
+
+.waking-notice span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waking-spinner {
+  flex: none;
+  animation: waking-spin 1s linear infinite;
+}
+
+@keyframes waking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .sidebar-toggle {
   display: grid;
   width: 2rem;
