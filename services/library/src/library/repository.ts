@@ -119,7 +119,7 @@ export function createSheetRepository(pool: sql.ConnectionPool) {
         .query<SheetRow>(
           `UPDATE sheets
            SET title = @title, composer = @composer, difficulty = @difficulty,
-               practice_status = @status
+               practice_status = @status, updated_at = SYSUTCDATETIME()
            OUTPUT INSERTED.id, INSERTED.title, INSERTED.composer, INSERTED.difficulty,
                   INSERTED.practice_status AS status, INSERTED.file_type AS fileType
            WHERE id = @id`,
