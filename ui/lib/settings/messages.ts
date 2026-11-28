@@ -12,6 +12,9 @@ const en = {
   "nav.expandSidebar": "Expand sidebar",
   "nav.collapseSidebar": "Collapse sidebar",
   "nav.loadError": "The library is not responding, so your sheets can't be shown right now. Try again in a minute.",
+  "service.library": "library",
+  "service.processing": "processing",
+  "service.waking": "Starting up the {services} service after a quiet period. This can take up to a minute…",
 
   "difficulty.Beginner": "Beginner",
   "difficulty.Intermediate": "Intermediate",
@@ -168,6 +171,9 @@ const es: Record<MessageKey, string> = {
   "nav.expandSidebar": "Expandir barra lateral",
   "nav.collapseSidebar": "Contraer barra lateral",
   "nav.loadError": "La biblioteca no responde, así que tus partituras no se pueden mostrar ahora. Inténtalo de nuevo en un minuto.",
+  "service.library": "biblioteca",
+  "service.processing": "procesamiento",
+  "service.waking": "Arrancando el servicio de {services} tras un rato sin uso. Puede tardar hasta un minuto…",
 
   "difficulty.Beginner": "Principiante",
   "difficulty.Intermediate": "Intermedio",
