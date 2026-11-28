@@ -96,6 +96,12 @@ export function AppShell() {
     loadSheets();
   }, [loadSheets]);
 
+  function handleUploaded(sheet: Sheet) {
+    loadSheets();
+    setActiveTab("library");
+    setSelectedSheet(sheet);
+  }
+
   return (
     <>
       {welcomed ? null : <WelcomeScreen onFinish={handleWelcomeFinish} />}
@@ -202,8 +208,6 @@ export function AppShell() {
             </Button>
             <Breadcrumb className="breadcrumb">
               <BreadcrumbList>
-                <BreadcrumbItem>{t("nav.workspace")}</BreadcrumbItem>
-                <BreadcrumbSeparator />
                 {selectedSheet ? (
                   <>
                     <BreadcrumbItem>
@@ -270,12 +274,7 @@ export function AppShell() {
                   />
                 ) : null}
                 {value === "upload" ? (
-                  <UploadView
-                    onOpenLibrary={() => handleTabChange("library")}
-                    onUploaded={() => {
-                      void loadSheets();
-                    }}
-                  />
+                  <UploadView onUploaded={handleUploaded} />
                 ) : null}
                 {value === "piano" ? (
                   <PianoView
