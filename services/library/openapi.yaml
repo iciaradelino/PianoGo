@@ -12,6 +12,8 @@ info:
 
     Every error response has the shape `{ "error": "<message for the user>" }`.
 servers:
+  - url: https://iadelino-ieu2024-library.lemonwater-3dc9606c.francecentral.azurecontainerapps.io
+    description: Azure (Container App iadelino-ieu2024-library)
   - url: http://localhost:8001
     description: Local (docker compose)
 tags:
@@ -125,6 +127,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
               example: { error: Add a title. }
         "404": { $ref: "#/components/responses/SheetNotFound" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
         "500": { $ref: "#/components/responses/ServerError" }
     delete:
       tags: [sheets]
@@ -207,6 +210,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
           example: { error: Sheet not found. }
+    BodyTooLarge:
+      description: The JSON body is larger than 100 KB.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: The request could not be read. }
     ServerError:
       description: An unexpected error, logged by the service without details in the response.
       content:
