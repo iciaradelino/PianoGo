@@ -15,6 +15,8 @@ info:
 
     Every error response has the shape `{ "error": "<message for the user>" }`.
 servers:
+  - url: https://iadelino-ieu2024-processing.lemonwater-3dc9606c.francecentral.azurecontainerapps.io
+    description: Azure (Container App iadelino-ieu2024-processing)
   - url: http://localhost:8002
     description: Local (docker compose)
 tags:
@@ -101,6 +103,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { error: Sheet not found. }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
         "500": { $ref: "#/components/responses/ServerError" }
         "503":
           description: |
@@ -144,6 +147,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
               example: { error: Generate annotations for this sheet first. }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
         "500": { $ref: "#/components/responses/ServerError" }
     delete:
       tags: [annotations]
@@ -198,6 +202,12 @@ components:
           example: { error: Sheet not found. }
     UnreadableBody:
       description: The body is not valid JSON.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: The request could not be read. }
+    BodyTooLarge:
+      description: The JSON body is larger than 100 KB.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
